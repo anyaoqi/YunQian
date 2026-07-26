@@ -1,25 +1,23 @@
 {
-  "name": "bookmark-organizer",
+  "name": "linknest",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "LinkNest - 本地优先的网址导航知识库",
   "type": "module",
-  "description": "整合、去重、自动分类多浏览器书签，并导出统一书签文件",
+  "workspaces": ["server", "web"],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "dexie": "^4.0.8",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zustand": "^4.5.5"
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm --workspace @linknest/server run dev",
+    "dev:web": "npm --workspace @linknest/web run dev",
+    "build": "npm --workspace @linknest/server run build && npm --workspace @linknest/web run build",
+    "start": "npm --workspace @linknest/server run start",
+    "typecheck": "npm --workspace @linknest/server run typecheck && npm --workspace @linknest/web run typecheck",
+    "clean": "node -e \"const {rmSync}=require('node:fs'); ['server/dist','web/dist'].forEach(p=>rmSync(p,{recursive:true,force:true}))\""
   },
   "devDependencies": {
-    "@types/react": "^18.3.5",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.2"
+    "concurrently": "9.1.2"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }
