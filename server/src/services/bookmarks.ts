@@ -3,7 +3,7 @@ import { AppError, notFound } from '../lib/errors.js';
 import { faviconFor, normalizeUrl, titleFallback } from '../lib/url.js';
 import type { Bookmark } from '../types.js';
 
-type BookmarkRow = Omit<Bookmark, 'tags'> & { isFavorite: number | boolean };
+type BookmarkRow = Omit<Bookmark, 'tags' | 'categoryPath'> & { isFavorite: number | boolean };
 type BookmarkInput = {
   url: string;
   title?: string;
@@ -18,19 +18,20 @@ type BookmarkFilters = {
   collectionId?: number | 'none';
   tag?: string;
   favorite?: 'true' | 'false';
+  direct?: 'true' | 'false';
   sort: 'newest' | 'oldest' | 'title' | 'popular';
   page: number;
   pageSize: number;
 };
 
-function toBookmark(row: BookmarkRow, tags: string[] = []): Bookmark {
-  return { ...row, isFavorite: Boolean(row.isFavorite), tags };
+function toBookmark(row: BookmarkRow, tags: string[] = [], categoryPath: string[] = []): Bookmark {
+  return { ...row, isFavorite: Boolean(row.isFavorite), tags, categoryPath };
 }
 
 function assertCollectionExists(collectionId: number | null | undefined): void {
   if (collectionId === null || collectionId === undefined) return;
   const found = db.prepare('SELECT 1 FROM collections WHERE id=?').get(collectionId);
-  if (!found) throw notFound('集合');
+  if (!found) throw notFound('分类');
 }
 
 function normalizedTags(tags: string[]): string[] {
@@ -67,6 +68,28 @@ function getTagsForBookmarkIds(ids: number[]): Map<number, string[]> {
   return tags;
 }
 
+function getCategoryPaths(collectionIds: number[]): Map<number, string[]> {
+  const paths = new Map<number, string[]>();
+  const ids = [...new Set(collectionIds)];
+  if (ids.length === 0) return paths;
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(`
+    WITH RECURSIVE ancestors(originId, id, parentId, name, depth) AS (
+      SELECT id, id, parent_id, name, 0 FROM collections WHERE id IN (${placeholders})
+      UNION ALL
+      SELECT a.originId, c.id, c.parent_id, c.name, a.depth + 1
+      FROM ancestors a JOIN collections c ON c.id = a.parentId
+    )
+    SELECT originId, name, depth FROM ancestors ORDER BY originId, depth DESC
+  `).all(...ids) as Array<{ originId: number; name: string; depth: number }>;
+  for (const row of rows) {
+    const path = paths.get(row.originId) ?? [];
+    path.push(row.name);
+    paths.set(row.originId, path);
+  }
+  return paths;
+}
+
 function getRawBookmark(id: number): BookmarkRow | undefined {
   return db.prepare(`
     SELECT b.id, b.url, b.title, b.description, b.note, b.favicon_url AS faviconUrl,
@@ -82,7 +105,8 @@ export function getBookmark(id: number): Bookmark {
   const row = getRawBookmark(id);
   if (!row) throw notFound('书签');
   const tags = getTagsForBookmarkIds([id]).get(id) ?? [];
-  return toBookmark(row, tags);
+  const categoryPath = row.collectionId === null ? [] : (getCategoryPaths([row.collectionId]).get(row.collectionId) ?? []);
+  return toBookmark(row, tags, categoryPath);
 }
 
 export function createBookmark(input: BookmarkInput): Bookmark {
@@ -145,7 +169,7 @@ function descendantIds(collectionId: number): number[] {
       UNION ALL SELECT c.id FROM collections c JOIN tree t ON c.parent_id=t.id
     ) SELECT id FROM tree
   `).all(collectionId) as Array<{ id: number }>;
-  if (rows.length === 0) throw notFound('集合');
+  if (rows.length === 0) throw notFound('分类');
   return rows.map((row) => row.id);
 }
 
@@ -157,12 +181,19 @@ export function listBookmarks(filters: BookmarkFilters): { items: Bookmark[]; to
     const value = `%${filters.q}%`;
     params.push(value, value, value, value);
   }
+  const browseDirect = filters.direct === 'true';
   if (filters.collectionId === 'none') conditions.push('b.collection_id IS NULL');
   else if (typeof filters.collectionId === 'number') {
-    const ids = descendantIds(filters.collectionId);
-    conditions.push(`b.collection_id IN (${ids.map(() => '?').join(',')})`);
-    params.push(...ids);
-  }
+    if (browseDirect) {
+      assertCollectionExists(filters.collectionId);
+      conditions.push('b.collection_id = ?');
+      params.push(filters.collectionId);
+    } else {
+      const ids = descendantIds(filters.collectionId);
+      conditions.push(`b.collection_id IN (${ids.map(() => '?').join(',')})`);
+      params.push(...ids);
+    }
+  } else if (browseDirect) conditions.push('b.collection_id IS NULL');
   if (filters.tag) {
     conditions.push('EXISTS (SELECT 1 FROM bookmark_tags bt JOIN tags t ON t.id=bt.tag_id WHERE bt.bookmark_id=b.id AND t.name=?)');
     params.push(filters.tag);
@@ -182,7 +213,11 @@ export function listBookmarks(filters: BookmarkFilters): { items: Bookmark[]; to
     ORDER BY ${orderBy[filters.sort]} LIMIT ? OFFSET ?
   `).all(...params, filters.pageSize, (filters.page - 1) * filters.pageSize) as BookmarkRow[];
   const tags = getTagsForBookmarkIds(rows.map((row) => row.id));
-  return { items: rows.map((row) => toBookmark(row, tags.get(row.id) ?? [])), total, page: filters.page, pageSize: filters.pageSize };
+  const categoryPaths = getCategoryPaths(rows.flatMap((row) => row.collectionId === null ? [] : [row.collectionId]));
+  return {
+    items: rows.map((row) => toBookmark(row, tags.get(row.id) ?? [], row.collectionId === null ? [] : (categoryPaths.get(row.collectionId) ?? []))),
+    total, page: filters.page, pageSize: filters.pageSize,
+  };
 }
 
 export function visitBookmark(id: number): number {

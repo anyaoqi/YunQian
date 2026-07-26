@@ -11,6 +11,7 @@ export type Bookmark = {
   lastVisitedAt: string | null;
   collectionId: number | null;
   collectionName: string | null;
+  categoryPath: string[];
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -24,6 +25,7 @@ export type Collection = {
   color: string | null;
   sortOrder: number;
   bookmarkCount: number;
+  favoriteCount: number;
   children: Collection[];
 };
 
@@ -35,6 +37,7 @@ export type BookmarkFilters = {
   collectionId?: number | 'none';
   tag?: string;
   favorite?: 'true' | 'false';
+  direct?: 'true' | 'false';
   sort: Sort;
   page: number;
   pageSize: number;

@@ -42,6 +42,7 @@ type Bookmark = {
   lastVisitedAt: string | null;
   collectionId: number | null;
   collectionName: string | null;
+  categoryPath: string[];          // 根分类 → 当前直属分类；未分类为 []
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -50,8 +51,9 @@ type Bookmark = {
 type Collection = {
   id: number; name: string; parentId: number | null;
   icon: string | null; color: string | null; sortOrder: number;
-  bookmarkCount: number;          // 仅自身直属数量
-  children: Collection[];         // 树形返回
+  bookmarkCount: number;        // 仅自身直属数量
+  favoriteCount: number;        // 自身直属星标数量（层级浏览星标视图用）
+  children: Collection[];       // 树形返回
 };
 
 type Tag = { id: number; name: string; color: string | null; count: number };
@@ -95,6 +97,7 @@ type Tag = { id: number; name: string; color: string | null; count: number };
 | `collectionId` | number \| `"none"` | — | 集合 id（含子孙）；`none` = 未分类 |
 | `tag` | string | — | 标签名精确匹配 |
 | `favorite` | `true`/`false` | — | 仅看星标 |
+| `direct` | `true`/`false` | — | `true` 为层级浏览：只返回当前层级**直属**书签（`collectionId` 省略时即根层未分类书签）；不传则返回子孙全部书签 |
 | `sort` | `newest`\|`oldest`\|`title`\|`popular` | `newest` | 排序 |
 | `page` | number | 1 | 页码，从 1 起 |
 | `pageSize` | number | 24 | 1–200 |

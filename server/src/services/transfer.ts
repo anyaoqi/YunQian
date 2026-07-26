@@ -84,7 +84,7 @@ export function parseNetscapeBookmarks(html: string): ImportedBookmark[] {
 
 function assertCollection(id: number | null | undefined): void {
   if (id === null || id === undefined) return;
-  if (!db.prepare('SELECT 1 FROM collections WHERE id=?').get(id)) throw notFound('导入目标集合');
+  if (!db.prepare('SELECT 1 FROM collections WHERE id=?').get(id)) throw notFound('导入目标分类');
 }
 
 function collectionIdForPath(path: string[], rootId: number | null, created: { value: number }): number | null {

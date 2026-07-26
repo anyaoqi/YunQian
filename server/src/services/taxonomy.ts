@@ -7,7 +7,8 @@ type CollectionRow = Omit<Collection, 'children'>;
 function getCollectionRow(id: number): CollectionRow | undefined {
   const row = db.prepare(`
     SELECT c.id, c.name, c.parent_id AS parentId, c.icon, c.color, c.sort_order AS sortOrder,
-      COUNT(b.id) AS bookmarkCount
+      COUNT(b.id) AS bookmarkCount,
+      COALESCE(SUM(b.is_favorite), 0) AS favoriteCount
     FROM collections c LEFT JOIN bookmarks b ON b.collection_id = c.id AND b.deleted_at IS NULL
     WHERE c.id = ? GROUP BY c.id
   `).get(id) as CollectionRow | undefined;
@@ -15,7 +16,7 @@ function getCollectionRow(id: number): CollectionRow | undefined {
 }
 
 function assertParentExists(parentId: number | null): void {
-  if (parentId !== null && !getCollectionRow(parentId)) throw notFound('父集合');
+  if (parentId !== null && !getCollectionRow(parentId)) throw notFound('父分类');
 }
 
 function assertSiblingNameAvailable(name: string, parentId: number | null, ignoreId?: number): void {
@@ -24,13 +25,14 @@ function assertSiblingNameAvailable(name: string, parentId: number | null, ignor
     : 'SELECT id FROM collections WHERE user_id = 1 AND parent_id = ? AND name = ?';
   const params: (string | number)[] = parentId === null ? [name] : [parentId, name];
   const found = db.prepare(sql).get(...params) as { id: number } | undefined;
-  if (found && found.id !== ignoreId) throw new AppError(409, 'DUPLICATE_NAME', '同级集合中已存在该名称');
+  if (found && found.id !== ignoreId) throw new AppError(409, 'DUPLICATE_NAME', '同级分类中已存在该名称');
 }
 
 export function listCollections(): Collection[] {
   const rows = db.prepare(`
     SELECT c.id, c.name, c.parent_id AS parentId, c.icon, c.color, c.sort_order AS sortOrder,
-      COUNT(b.id) AS bookmarkCount
+      COUNT(b.id) AS bookmarkCount,
+      COALESCE(SUM(b.is_favorite), 0) AS favoriteCount
     FROM collections c LEFT JOIN bookmarks b ON b.collection_id = c.id AND b.deleted_at IS NULL
     GROUP BY c.id ORDER BY c.sort_order ASC, c.name COLLATE NOCASE ASC
   `).all() as CollectionRow[];
@@ -70,10 +72,10 @@ function isDescendant(candidateId: number, ancestorId: number): boolean {
 
 export function updateCollection(id: number, input: Partial<{ name: string; parentId: number | null; icon: string | null; color: string | null }>): Collection {
   const current = getCollectionRow(id);
-  if (!current) throw notFound('集合');
+  if (!current) throw notFound('分类');
   const parentId = input.parentId === undefined ? current.parentId : input.parentId;
   if (parentId === id || (parentId !== null && isDescendant(parentId, id))) {
-    throw new AppError(422, 'INVALID_PARENT', '不能将集合移动到自身或其子集合中');
+    throw new AppError(422, 'INVALID_PARENT', '不能将分类移动到自身或其子分类中');
   }
   assertParentExists(parentId);
   const name = input.name ?? current.name;
@@ -89,7 +91,7 @@ export function updateCollection(id: number, input: Partial<{ name: string; pare
 
 export function deleteCollection(id: number): void {
   const current = getCollectionRow(id);
-  if (!current) throw notFound('集合');
+  if (!current) throw notFound('分类');
   inTransaction(() => {
     db.prepare('UPDATE bookmarks SET collection_id=NULL, updated_at=? WHERE collection_id=?').run(now(), id);
     db.prepare('UPDATE collections SET parent_id=?, updated_at=? WHERE parent_id=?').run(current.parentId, now(), id);

@@ -24,6 +24,7 @@ export const bookmarkListSchema = z.object({
   collectionId: z.union([z.coerce.number().int().positive(), z.literal('none')]).optional(),
   tag: tagName.optional(),
   favorite: z.enum(['true', 'false']).optional(),
+  direct: z.enum(['true', 'false']).optional(),
   sort: z.enum(['newest', 'oldest', 'title', 'popular']).optional().default('newest'),
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(200).optional().default(24),

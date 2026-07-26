@@ -26,8 +26,8 @@ function CollectionItem({ collection, depth, activeId, onCollection, onCreate, o
         <span>{collection.icon ?? '📁'}</span><span className="tree-name">{collection.name}</span><small>{collection.bookmarkCount}</small>
       </button>
       <span className="tree-actions">
-        <button onClick={() => onCreate(collection.id)} title="新建子集合">+</button>
-        <button onClick={() => onDelete(collection)} title="删除集合">×</button>
+        <button onClick={() => onCreate(collection.id)} title="新建子分类">+</button>
+        <button onClick={() => onDelete(collection)} title="删除分类">×</button>
       </span>
     </div>
     {collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} />)}
@@ -44,9 +44,9 @@ export function Sidebar(props: Props) {
     </nav>
 
     <section className="side-section collection-section">
-      <div className="section-title"><span>集合</span><button onClick={() => props.onCreateCollection(null)} title="新建根集合">+</button></div>
+      <div className="section-title"><span>分类</span><button onClick={() => props.onCreateCollection(null)} title="新建根分类">+</button></div>
       <div className="collection-tree">
-        {props.collections.length === 0 ? <p className="side-empty">还没有集合</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} />)}
+        {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} />)}
       </div>
     </section>
 

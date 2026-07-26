@@ -25,11 +25,11 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
     <div className="modal import-dialog">
       <div className="modal-header"><div><span className="eyebrow">迁移你的收藏</span><h2>导入浏览器书签</h2></div><button className="icon-close" onClick={close}>×</button></div>
-      <p className="modal-description">支持 Chrome、Edge、Firefox 和 Safari 导出的 <code>bookmarks.html</code>。文件夹会保留为集合，浏览器标签会自动导入。</p>
+      <p className="modal-description">支持 Chrome、Edge、Firefox 和 Safari 导出的 <code>bookmarks.html</code>。文件夹会保留为分类，浏览器标签会自动导入。</p>
       <label className="drop-zone"><input type="file" accept=".html,.htm,text/html" onChange={chooseFile} /><span className="upload-icon">⇧</span><strong>{file ? file.name : '选择书签 HTML 文件'}</strong><small>{file ? `${Math.ceil(file.size / 1024)} KB` : '或拖入文件到此处'}</small></label>
       <label className="field"><span>重复网址的处理方式</span><select value={mode} onChange={(event) => setMode(event.target.value as 'skip' | 'overwrite')}><option value="skip">跳过已存在的网址（推荐）</option><option value="overwrite">以导入内容覆盖已有书签</option></select></label>
       {error && <p className="form-error">{error}</p>}
-      {result && <div className="import-result"><strong>导入完成</strong><div><span><b>{result.imported}</b> 条已导入</span><span><b>{result.skipped}</b> 条已跳过</span><span><b>{result.collectionsCreated}</b> 个新集合</span><span><b>{result.tagsCreated}</b> 个新标签</span></div><small>耗时 {result.durationMs} ms</small></div>}
+      {result && <div className="import-result"><strong>导入完成</strong><div><span><b>{result.imported}</b> 条已导入</span><span><b>{result.skipped}</b> 条已跳过</span><span><b>{result.collectionsCreated}</b> 个新分类</span><span><b>{result.tagsCreated}</b> 个新标签</span></div><small>耗时 {result.durationMs} ms</small></div>}
       <div className="modal-footer"><button className="button secondary" onClick={close}>{result ? '完成' : '取消'}</button>{!result && <button className="button primary" disabled={!file || busy} onClick={upload}>{busy ? '正在导入…' : '开始导入'}</button>}</div>
     </div>
   </div>;
