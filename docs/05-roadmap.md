@@ -65,6 +65,32 @@
 
 安全门槛：上线公网前必须完成用户体系、速率限制、HTTPS、CSRF 策略。
 
+### 技术决策：本阶段迁移到 Next.js
+
+V1/V2 采用 React + Vite + Express 拆分架构（理由见 [02-architecture.md](./02-architecture.md) 选型表）。迁移到 Next.js（App Router）安排在 V3，因为 Next 的核心价值——SSR、Server Actions、分享页元信息——恰好都落在本阶段的公开分享与多用户功能上；提前迁移只会付出固定成本而拿不到收益，还要在 V2 功能开发期间持续承担 Server/Client 边界与缓存语义的心智负担。
+
+迁移评估（基于 V1 代码 1465 行）：
+
+| 类别 | 涉及文件 | 行数 | 动作 |
+| --- | --- | --- | --- |
+| 零改动搬运 | `services/*`、`lib/{url,validators}.ts`、`db/schema.ts`、`types.ts` | 723 | 移入 `lib/server/` |
+| 加 `'use client'` | `components/*.tsx`、`App.tsx` | 447 | 移入 `lib/components/` |
+| 需改写 | `routes/api.ts`、`index.ts`、`lib/errors.ts`、`db/index.ts` | 195 | 见下四点 |
+| 可能删除 | `web/src/{api,main}.ts(x)` | 45 | 改用 Server Actions 后不再需要 |
+
+services 层是纯函数 + 参数化 SQL，不 import 任何 Express 类型，这是迁移成本可控的根本原因。
+
+四个必须处理的改动点：
+
+1. **数据库连接改为惰性单例**。现在 `db/index.ts` 在模块顶层建连接并执行 DDL；Next 下会在 `next build` 阶段就创建数据库文件，且开发态热重载会重复建连接。改为 `getDb()` + `globalThis` 缓存，services 内 `db.prepare(...)` 相应改为 `getDb().prepare(...)`（约 100 处，可用 AST 批量重写）。
+2. **每个 Route Handler 声明运行时**：`export const runtime = 'nodejs'`（`node:sqlite` 在 Edge Runtime 不可用）与 `export const dynamic = 'force-dynamic'`（书签数据不可静态缓存，漏掉会导致增删改后读到旧数据）。
+3. **统一错误处理**从 Express 的单个 `errorHandler` 中间件改为高阶包装函数，逐个 route 套用（12 个调用点），保持 `AppError` / `ZodError` → 错误码响应的映射不变。
+4. **两个特殊响应**：`POST /api/import` 的 `text/plain` 大文本改为 `await request.text()` 并放开体积限制；`GET /api/export` 的 `Content-Disposition` 下载头改用 `new Response(json, { headers })`。
+
+预估工作量 1–1.5 天（含回归验证）。迁移后收益：单一项目与单端口（不再需要 concurrently 与 Vite 代理）、`page.tsx` 可用 Server Component 直接查库预取首屏、公开分享页获得 SSR 与元信息。
+
+> ⚠️ 部署约束：若同期考虑部署到 Vercel 等无状态平台，本地 SQLite 文件无法持久化，需连带迁移到 Turso / libSQL 等远程 SQLite —— 该改动量远大于框架迁移本身，必须单独评估。
+
 ---
 
 ## V4 — 知识库与 AI

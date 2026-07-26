@@ -4,7 +4,7 @@
 
 ```
 ┌──────────────────────── 浏览器 ────────────────────────┐
-│  Web SPA (React 19 + TypeScript + Vite + Tailwind 4)   │
+│  Web SPA (React 19 + TypeScript + Vite + 手写 CSS)      │
 │  状态: React Hooks + 轻量 API 客户端 (fetch 封装)        │
 └───────────────────────────┬────────────────────────────┘
                             │ HTTP / JSON  (/api/*)
@@ -29,12 +29,21 @@
 | 后端框架 | **Express 5** | 生态成熟、心智负担低、中间件丰富 | Fastify（性能更好）、Hono |
 | 语言 | **TypeScript**（前后端统一） | 类型贯通 API 契约，减少联调错误 | JS |
 | 校验 | **Zod** | schema 即类型，请求校验与 TS 类型单一来源 | 手写校验 |
-| 前端 | **React + Vite** | 启动快、HMR 快、生态最大 | Vue3、SvelteKit |
-| 样式 | **Tailwind CSS 4** | 无需写 CSS 文件即可高密度排版，`@tailwindcss/vite` 零配置 | CSS Modules、UnoCSS |
+| 前端 | **React + Vite** | 启动快、HMR 快、生态最大；V1 无 SSR/SEO 需求，独立 SPA + REST 便于 V3 浏览器扩展复用同一套 API | Next.js（见下方说明）、Vue3、SvelteKit |
+| 样式 | **手写 CSS**（单文件 `styles.css`） | 零构建插件依赖、可控；V1 界面规模小，不值得引入工具链 | Tailwind CSS、CSS Modules、UnoCSS |
 | 运行编排 | **npm workspaces + concurrently** | 单命令启动前后端，无需 Docker 即可开发 | pnpm、Turborepo |
 | 开发执行 | **tsx** | 直接跑 TS，无编译等待 | ts-node、nodemon+tsc |
 
-**不引入的东西（V1 刻意省略）**：ORM（SQL 直写更透明）、状态管理库（Hooks 足够）、组件库（Tailwind 手写更可控）、Docker（V1 目标是"今天就能跑"）。
+**不引入的东西（V1 刻意省略）**：ORM（SQL 直写更透明）、状态管理库（Hooks 足够）、组件库（手写 CSS 更可控）、Docker（V1 目标是"今天就能跑"）。
+
+### 为什么 V1 不用 Next.js
+
+1. **API 需要被多客户端复用**：V3 的浏览器扩展、V4 的分享页都要消费同一套 REST 契约，独立 API 服务比全栈框架更贴合。
+2. **没有 SSR/SEO 需求**：本地单用户工作台，Next 的流式渲染、RSC 数据获取换不来收益，却要承担 Server/Client 边界与缓存语义成本。
+3. **`node:sqlite` 是进程内长驻连接**：在 Express 里就是一个模块级单例；Next 下需处理热重载重复实例化与构建期不得触库的问题。
+4. **交付时间约束**：V1 目标是当天可用，Vite + Express 的启动速度与排查路径最短。
+
+该决策已复盘并排期：**V3 阶段迁移到 Next.js**，完整评估与四个改动点见 [05-roadmap.md](./05-roadmap.md#技术决策本阶段迁移到-nextjs)。
 
 ## 3. 目录结构
 
