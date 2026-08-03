@@ -5,9 +5,30 @@ import { BookmarkList } from './components/BookmarkList';
 import { ImportDialog } from './components/ImportDialog';
 import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
-import type { Bookmark, BookmarkFilters, Collection, Stats, Tag } from './types';
+import type { Bookmark, BookmarkFilters, Collection, Sort, Stats, Tag } from './types';
 
+const VIEW_KEY = 'linknest:view';
+const VALID_SORTS = ['newest', 'oldest', 'title', 'popular'] as const;
 const defaultFilters: BookmarkFilters = { sort: 'newest', page: 1, pageSize: 24, direct: 'true' };
+
+function loadView(): BookmarkFilters {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return defaultFilters;
+    const saved: unknown = JSON.parse(raw);
+    if (!saved || typeof saved !== 'object') return defaultFilters;
+    const data = saved as Record<string, unknown>;
+    const restored: BookmarkFilters = { ...defaultFilters, page: 1 };
+    if (typeof data.collectionId === 'number' && data.collectionId >= 1 || data.collectionId === 'none') restored.collectionId = data.collectionId;
+    if (typeof data.tag === 'string') restored.tag = data.tag;
+    if (data.favorite === 'true' || data.favorite === 'false') restored.favorite = data.favorite;
+    if (typeof data.sort === 'string' && (VALID_SORTS as readonly string[]).includes(data.sort)) restored.sort = data.sort as Sort;
+    if (data.direct === 'true' || data.direct === 'false') restored.direct = data.direct;
+    return restored;
+  } catch {
+    return defaultFilters;
+  }
+}
 
 function pathToCategory(categories: Collection[], id: number): Collection[] {
   for (const category of categories) {
@@ -28,7 +49,7 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [items, setItems] = useState<Bookmark[]>([]);
   const [total, setTotal] = useState(0);
-  const [filters, setFilters] = useState<BookmarkFilters>(defaultFilters);
+  const [filters, setFilters] = useState<BookmarkFilters>(loadView);
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,6 +66,17 @@ export default function App() {
   }, []);
 
   useEffect(() => { void refreshTaxonomy(); }, [refreshTaxonomy, refreshKey]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({
+        collectionId: filters.collectionId,
+        tag: filters.tag,
+        favorite: filters.favorite,
+        sort: filters.sort,
+        direct: filters.direct,
+      }));
+    } catch { /* 忽略 */ }
+  }, [filters.collectionId, filters.tag, filters.favorite, filters.sort, filters.direct]);
   useEffect(() => {
     const timer = window.setTimeout(() => setFilters((old) => ({ ...old, q: searchText || undefined, direct: searchText ? undefined : 'true', page: 1 })), 300);
     return () => window.clearTimeout(timer);

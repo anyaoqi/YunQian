@@ -1,4 +1,5 @@
 import type { Bookmark, Collection } from '../types';
+import { Favicon, hostOf as domainOf } from './Favicon';
 
 type Props = {
   bookmarks: Bookmark[];
@@ -17,10 +18,6 @@ type Props = {
   onRenameCategory: (category: Collection) => void;
   onDeleteCategory: (category: Collection) => void;
 };
-
-function domainOf(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
-}
 
 function relativeDate(value: string): string {
   const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000);
@@ -63,7 +60,7 @@ export function BookmarkList(props: Props) {
     })}
 
     {bookmarks.map((bookmark) => <article className="bookmark-card" key={bookmark.id}>
-      <div className="bookmark-icon">{bookmark.faviconUrl ? <img src={bookmark.faviconUrl} alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} /> : '↗'}</div>
+      <div className="bookmark-icon"><Favicon faviconUrl={bookmark.faviconUrl} url={bookmark.url} /></div>
       <div className="bookmark-body">
         <div className="bookmark-heading">
           <a href={bookmark.url} target="_blank" rel="noreferrer" onClick={() => onVisit(bookmark)}>{bookmark.title || domainOf(bookmark.url)}</a>

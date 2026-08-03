@@ -1,4 +1,19 @@
+import { useEffect, useState } from 'react';
 import type { Collection, Stats, Tag } from '../types';
+
+const COLLAPSED_KEY = 'linknest:collapsed-tree';
+
+function loadCollapsed(): Set<number> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is number => typeof id === 'number'));
+  } catch {
+    return new Set();
+  }
+}
 
 type Props = {
   collections: Collection[];
@@ -16,12 +31,20 @@ type Props = {
   onDeleteTag: (tag: Tag) => void;
 };
 
-function CollectionItem({ collection, depth, activeId, onCollection, onCreate, onRename, onDelete }: {
-  collection: Collection; depth: number; activeId: Props['collectionId']; onCollection: Props['onCollection'];
-  onCreate: Props['onCreateCollection']; onRename: Props['onRenameCollection']; onDelete: Props['onDeleteCollection'];
+function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCollection, onCreate, onRename, onDelete }: {
+  collection: Collection; depth: number; activeId: Props['collectionId']; collapsed: Set<number>;
+  onToggle: (id: number) => void;
+  onCollection: Props['onCollection']; onCreate: Props['onCreateCollection']; onRename: Props['onRenameCollection']; onDelete: Props['onDeleteCollection'];
 }) {
+  const hasChildren = collection.children.length > 0;
+  const isCollapsed = collapsed.has(collection.id);
   return <>
     <div className={`tree-item ${activeId === collection.id ? 'active' : ''}`} style={{ paddingLeft: 12 + depth * 15 }}>
+      {hasChildren
+        ? <button className="collapse-toggle" onClick={(event) => { event.stopPropagation(); onToggle(collection.id); }} title={isCollapsed ? '展开' : '收起'} aria-label={isCollapsed ? '展开' : '收起'} aria-expanded={!isCollapsed}>
+          {isCollapsed ? '▸' : '▾'}
+        </button>
+        : <span className="collapse-toggle" />}
       <button className="tree-main" onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} title="双击重命名">
         <span>{collection.icon ?? '📁'}</span><span className="tree-name">{collection.name}</span><small>{collection.bookmarkCount}</small>
       </button>
@@ -30,11 +53,30 @@ function CollectionItem({ collection, depth, activeId, onCollection, onCreate, o
         <button onClick={() => onDelete(collection)} title="删除分类">×</button>
       </span>
     </div>
-    {collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} />)}
+    {!isCollapsed && collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} collapsed={collapsed} onToggle={onToggle} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} />)}
   </>;
 }
 
 export function Sidebar(props: Props) {
+  const [collapsed, setCollapsed] = useState<Set<number>>(loadCollapsed);
+
+  useEffect(() => {
+    if (props.collections.length === 0) return;
+    const known = new Set<number>();
+    const collect = (list: Collection[]) => { for (const category of list) { known.add(category.id); collect(category.children); } };
+    collect(props.collections);
+    let changed = false;
+    const next = new Set<number>();
+    for (const id of collapsed) { if (known.has(id)) next.add(id); else changed = true; }
+    if (changed) setCollapsed(next);
+  }, [props.collections, collapsed]);
+
+  useEffect(() => {
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { }
+  }, [collapsed]);
+
+  const toggleCollapsed = (id: number) => setCollapsed((old) => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+
   return <aside className="sidebar">
     <div className="brand"><span className="brand-mark">⌘</span><span>LinkNest</span></div>
     <nav className="primary-nav" aria-label="书签筛选">
@@ -46,7 +88,7 @@ export function Sidebar(props: Props) {
     <section className="side-section collection-section">
       <div className="section-title"><span>分类</span><button onClick={() => props.onCreateCollection(null)} title="新建根分类">+</button></div>
       <div className="collection-tree">
-        {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} />)}
+        {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} collapsed={collapsed} onToggle={toggleCollapsed} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} />)}
       </div>
     </section>
 

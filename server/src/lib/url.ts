@@ -24,7 +24,7 @@ export function normalizeUrl(input: string): string {
 
 export function faviconFor(urlValue: string): string {
   const url = new URL(urlValue);
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64`;
+  return `https://a.favicon.im/${encodeURIComponent(url.hostname)}`;
 }
 
 export function titleFallback(urlValue: string): string {
