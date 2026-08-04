@@ -6,6 +6,7 @@ import express from 'express';
 import { errorHandler } from './lib/errors.js';
 import { apiRouter } from './routes/api.js';
 import './db/index.js';
+import { purgeExpiredTrash } from './services/bookmarks.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
@@ -27,3 +28,13 @@ app.use(errorHandler);
 app.listen(port, host, () => {
   console.log(`LinkNest API listening at http://${host}:${port}`);
 });
+
+// 每 24 小时清理超过 30 天的回收站条目
+setInterval(() => {
+  try {
+    const { deleted } = purgeExpiredTrash(30);
+    if (deleted > 0) console.log(`Trash cleanup: purged ${deleted} expired items`);
+  } catch (error) {
+    console.error('Trash cleanup failed:', error);
+  }
+}, 24 * 60 * 60 * 1000);

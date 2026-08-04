@@ -1,12 +1,12 @@
 import { Router, text } from 'express';
+import { z } from 'zod';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { faviconFor, isSafePublicHttpUrl, normalizeUrl } from '../lib/url.js';
-import {
-  bookmarkCreateSchema, bookmarkListSchema, bookmarkUpdateSchema, collectionCreateSchema,
+import { batchDeleteSchema, batchMoveSchema, batchTagsSchema, bookmarkCreateSchema, bookmarkListSchema, bookmarkUpdateSchema, collectionCreateSchema,
   collectionUpdateSchema, fetchTitleSchema, idParamSchema, importBodySchema, tagCreateSchema,
 } from '../lib/validators.js';
-import { createBookmark, deleteBookmark, getBookmark, getStats, listBookmarks, updateBookmark, visitBookmark } from '../services/bookmarks.js';
-import { createCollection, createTag, deleteCollection, deleteTag, listCollections, listTags, updateCollection } from '../services/taxonomy.js';
+import { batchAddTags, batchDeleteBookmarks, batchMoveBookmarks, createBookmark, deleteBookmark, emptyTrash, getBookmark, getStats, listBookmarks, listTrashedBookmarks, permanentlyDeleteBookmark, restoreBookmark, updateBookmark, visitBookmark } from '../services/bookmarks.js';
+import { createCollection, createTag, deleteCollection, deleteTag, listCollections, listTags, mergeTags, updateCollection, updateTag, cleanOrphanTags } from '../services/taxonomy.js';
 import { buildExport, importNetscapeHtml } from '../services/transfer.js';
 
 function decodeHtml(text: string): string {
@@ -51,6 +51,33 @@ apiRouter.delete('/bookmarks/:id', asyncHandler((req, res) => {
 apiRouter.post('/bookmarks/:id/visit', asyncHandler((req, res) => {
   res.json({ clickCount: visitBookmark(idParamSchema.parse(req.params).id) });
 }));
+apiRouter.post('/bookmarks/batch/move', asyncHandler((req, res) => {
+  const input = batchMoveSchema.parse(req.body);
+  res.json(batchMoveBookmarks(input.ids, input.collectionId ?? null));
+}));
+apiRouter.post('/bookmarks/batch/tags', asyncHandler((req, res) => {
+  const input = batchTagsSchema.parse(req.body);
+  res.json(batchAddTags(input.ids, input.tags));
+}));
+apiRouter.post('/bookmarks/batch/delete', asyncHandler((req, res) => {
+  const input = batchDeleteSchema.parse(req.body);
+  res.json(batchDeleteBookmarks(input.ids));
+}));
+
+apiRouter.get('/trash', (_req, res) => {
+  res.json(listTrashedBookmarks());
+});
+apiRouter.post('/trash/:id/restore', asyncHandler((req, res) => {
+  res.json(restoreBookmark(idParamSchema.parse(req.params).id));
+}));
+apiRouter.delete('/trash/:id', asyncHandler((req, res) => {
+  permanentlyDeleteBookmark(idParamSchema.parse(req.params).id);
+  res.status(204).end();
+}));
+apiRouter.delete('/trash', (_req, res) => {
+  const result = emptyTrash();
+  res.json(result);
+});
 
 apiRouter.get('/collections', (_req, res) => res.json(listCollections()));
 apiRouter.post('/collections', asyncHandler((req, res) => {
@@ -68,6 +95,16 @@ apiRouter.get('/tags', (_req, res) => res.json(listTags()));
 apiRouter.post('/tags', asyncHandler((req, res) => {
   res.status(201).json(createTag(tagCreateSchema.parse(req.body)));
 }));
+apiRouter.patch('/tags/:id', asyncHandler((req, res) => {
+  res.json(updateTag(idParamSchema.parse(req.params).id, tagCreateSchema.partial().parse(req.body)));
+}));
+apiRouter.post('/tags/:id/merge/:targetId', asyncHandler((req, res) => {
+  const params = z.object({ id: z.coerce.number().int().positive(), targetId: z.coerce.number().int().positive() }).parse(req.params);
+  res.json(mergeTags(params.id, params.targetId));
+}));
+apiRouter.post('/tags/clean-orphans', asyncHandler((_req, res) => {
+  res.json(cleanOrphanTags());
+}));
 apiRouter.delete('/tags/:id', asyncHandler((req, res) => {
   deleteTag(idParamSchema.parse(req.params).id);
   res.status(204).end();
@@ -75,7 +112,7 @@ apiRouter.delete('/tags/:id', asyncHandler((req, res) => {
 
 apiRouter.post('/fetch-title', asyncHandler(async (req, res) => {
   if (process.env.DISABLE_FETCH_TITLE === '1') {
-    res.json({ title: null, faviconUrl: null });
+    res.json({ title: null, faviconUrl: null, description: null, coverUrl: null });
     return;
   }
   const input = fetchTitleSchema.parse(req.body);
@@ -88,10 +125,17 @@ apiRouter.post('/fetch-title', asyncHandler(async (req, res) => {
       redirect: 'manual',
     });
     const html = (await response.text()).slice(0, 512_000);
-    const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-    const title = match ? decodeHtml(match[1].replace(/\s+/g, ' ').trim()).slice(0, 500) : null;
-    res.json({ title: title || null, faviconUrl: faviconFor(url) });
+    const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+    const title = titleMatch ? decodeHtml(titleMatch[1].replace(/\s+/g, ' ').trim()).slice(0, 500) : null;
+    const descriptionMatch = /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']|<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i.exec(html);
+    const description = descriptionMatch ? decodeHtml((descriptionMatch[1] || descriptionMatch[2]).replace(/\s+/g, ' ').trim()).slice(0, 1_000) : null;
+    const coverMatch = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']|<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(html);
+    let coverUrl = coverMatch ? (coverMatch[1] || coverMatch[2]).trim() : null;
+    if (coverUrl && !/^https?:\/\//i.test(coverUrl)) {
+      try { coverUrl = new URL(coverUrl, url).href; } catch { coverUrl = null; }
+    }
+    res.json({ title: title || null, description, coverUrl, faviconUrl: faviconFor(url) });
   } catch {
-    res.json({ title: null, faviconUrl: faviconFor(url) });
+    res.json({ title: null, description: null, coverUrl: null, faviconUrl: faviconFor(url) });
   }
 }));

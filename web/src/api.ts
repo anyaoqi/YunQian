@@ -1,4 +1,4 @@
-import type { Bookmark, BookmarkFilters, BookmarkPayload, Collection, ImportResult, PaginatedBookmarks, Stats, Tag } from './types';
+import type { Bookmark, BookmarkFilters, BookmarkPayload, Collection, ImportResult, PaginatedBookmarks, Stats, Tag, TrashedBookmark } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, init);
@@ -27,11 +27,21 @@ export const api = {
   updateBookmark: (id: number, payload: Partial<BookmarkPayload>) => request<Bookmark>(`/bookmarks/${id}`, json('PATCH', payload)),
   deleteBookmark: (id: number) => request<void>(`/bookmarks/${id}`, { method: 'DELETE' }),
   visitBookmark: (id: number) => request<{ clickCount: number }>(`/bookmarks/${id}/visit`, { method: 'POST' }),
+  trash: () => request<TrashedBookmark[]>('/trash'),
+  restoreBookmark: (id: number) => request<Bookmark>(`/trash/${id}/restore`, { method: 'POST' }),
+  permanentlyDeleteBookmark: (id: number) => request<void>(`/trash/${id}`, { method: 'DELETE' }),
+  emptyTrash: () => request<{ deleted: number }>('/trash', { method: 'DELETE' }),
+  batchMoveBookmarks: (ids: number[], collectionId: number | null) => request<{ updated: number }>('/bookmarks/batch/move', json('POST', { ids, collectionId })),
+  batchAddTags: (ids: number[], tags: string[]) => request<{ tagsCreated: number }>('/bookmarks/batch/tags', json('POST', { ids, tags })),
+  batchDeleteBookmarks: (ids: number[]) => request<{ updated: number }>('/bookmarks/batch/delete', json('POST', { ids })),
   createCollection: (payload: { name: string; parentId?: number | null }) => request<Collection>('/collections', json('POST', payload)),
   updateCollection: (id: number, payload: { name?: string; parentId?: number | null }) => request<Collection>(`/collections/${id}`, json('PATCH', payload)),
   deleteCollection: (id: number) => request<void>(`/collections/${id}`, { method: 'DELETE' }),
   deleteTag: (id: number) => request<void>(`/tags/${id}`, { method: 'DELETE' }),
-  fetchTitle: (url: string) => request<{ title: string | null; faviconUrl: string | null }>('/fetch-title', json('POST', { url })),
+  updateTag: (id: number, payload: { name?: string; color?: string | null }) => request<Tag>(`/tags/${id}`, json('PATCH', payload)),
+  mergeTags: (sourceId: number, targetId: number) => request<{ moved: number }>(`/tags/${sourceId}/merge/${targetId}`, { method: 'POST' }),
+  cleanOrphanTags: () => request<{ deleted: number }>('/tags/clean-orphans', { method: 'POST' }),
+  fetchTitle: (url: string) => request<{ title: string | null; description: string | null; coverUrl: string | null; faviconUrl: string | null }>('/fetch-title', json('POST', { url })),
   importHtml: async (file: File, mode: 'skip' | 'overwrite' = 'skip') => {
     const html = await file.text();
     return request<ImportResult>('/import', json('POST', { html, mode }));

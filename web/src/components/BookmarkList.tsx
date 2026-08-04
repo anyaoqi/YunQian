@@ -7,6 +7,7 @@ type Props = {
   browsing: boolean;
   favoriteMode: boolean;
   loading: boolean;
+  selectedIds: Set<number>;
   onEdit: (bookmark: Bookmark) => void;
   onDelete: (bookmark: Bookmark) => void;
   onFavorite: (bookmark: Bookmark) => void;
@@ -17,6 +18,7 @@ type Props = {
   onCreateCategory: (parentId: number) => void;
   onRenameCategory: (category: Collection) => void;
   onDeleteCategory: (category: Collection) => void;
+  onToggleSelect: (id: number) => void;
 };
 
 function relativeDate(value: string): string {
@@ -33,7 +35,7 @@ function subtreeTotal(category: Collection, favoriteMode: boolean): number {
 }
 
 export function BookmarkList(props: Props) {
-  const { bookmarks, categories, browsing, favoriteMode, loading, onEdit, onDelete, onFavorite, onVisit, onTag, onAdd } = props;
+  const { bookmarks, categories, browsing, favoriteMode, loading, onEdit, onDelete, onFavorite, onVisit, onTag, onAdd, selectedIds, onToggleSelect } = props;
   if (loading) return <div className="content-state"><span className="loader" />正在加载…</div>;
   if (bookmarks.length === 0 && categories.length === 0) return <div className="content-state empty-state">
     <div className="empty-icon">⌘</div><h2>这里还没有内容</h2><p>添加一个常用网址，或者导入浏览器已有的收藏。</p><button className="button primary" onClick={onAdd}>+ 添加第一条书签</button>
@@ -59,7 +61,13 @@ export function BookmarkList(props: Props) {
       </article>;
     })}
 
-    {bookmarks.map((bookmark) => <article className="bookmark-card" key={bookmark.id}>
+    {bookmarks.map((bookmark) => <article
+      className={`bookmark-card ${selectedIds.has(bookmark.id) ? 'selected' : ''}`}
+      key={bookmark.id}
+      draggable
+      onDragStart={(event) => { event.dataTransfer.setData('text/plain', String(bookmark.id)); event.dataTransfer.effectAllowed = 'move'; }}
+    >
+      <input type="checkbox" className="batch-checkbox" checked={selectedIds.has(bookmark.id)} onChange={() => onToggleSelect(bookmark.id)} aria-label="选择" />
       <div className="bookmark-icon"><Favicon faviconUrl={bookmark.faviconUrl} url={bookmark.url} /></div>
       <div className="bookmark-body">
         <div className="bookmark-heading">

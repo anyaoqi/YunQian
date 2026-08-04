@@ -37,7 +37,9 @@ export const collectionCreateSchema = z.object({
   color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
 });
 
-export const collectionUpdateSchema = collectionCreateSchema.partial();
+export const collectionUpdateSchema = collectionCreateSchema.partial().extend({
+  sortOrder: z.number().int().optional(),
+});
 
 export const tagCreateSchema = z.object({
   name: tagName,
@@ -50,4 +52,18 @@ export const importBodySchema = z.object({
   html: z.string().min(1).max(20 * 1024 * 1024),
   collectionId: z.number().int().positive().nullable().optional(),
   mode: z.enum(['skip', 'overwrite']).optional().default('skip'),
+});
+
+export const batchMoveSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(200),
+  collectionId: z.number().int().positive().nullable().optional(),
+});
+
+export const batchTagsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(200),
+  tags: z.array(tagName).min(1).max(30),
+});
+
+export const batchDeleteSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(200),
 });
