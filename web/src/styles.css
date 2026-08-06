@@ -301,6 +301,7 @@ html[data-theme="dark"] .tag-chip:hover { background: #35325a; }
 
 .tree-item.drop-target.drag-over { background: var(--sidebar-active); }
 .tree-item.drop-target { transition: background .12s; }
+.tree-item.dragging { opacity: 0.4; }
 
 .view-toggle { display: inline-flex; border: 1px solid var(--border-input); border-radius: 8px; overflow: hidden; }
 .view-toggle button { border: 0; background: var(--bg-input); color: var(--text-muted); padding: 6px 9px; font-size: 13px; }

@@ -34,19 +34,30 @@ type Props = {
   onDeleteTag: (tag: Tag) => void;
   onManageTags: () => void;
   onDropBookmark?: (collectionId: number | null, bookmarkId: number) => void;
+  onReorderCollection?: (parentId: number | null, orderedIds: number[]) => void;
 };
 
-function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCollection, onCreate, onRename, onDelete, onDropBookmark }: {
+function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCollection, onCreate, onRename, onDelete, onDropBookmark, onReorderCollection, siblings }: {
   collection: Collection; depth: number; activeId: Props['collectionId']; collapsed: Set<number>;
   onToggle: (id: number) => void;
-  onCollection: Props['onCollection']; onCreate: Props['onCreateCollection']; onRename: Props['onRenameCollection']; onDelete: Props['onDeleteCollection']; onDropBookmark?: Props['onDropBookmark'];
+  onCollection: Props['onCollection']; onCreate: Props['onCreateCollection']; onRename: Props['onRenameCollection']; onDelete: Props['onDeleteCollection']; onDropBookmark?: Props['onDropBookmark']; onReorderCollection?: Props['onReorderCollection']; siblings: Collection[];
 }) {
   const hasChildren = collection.children.length > 0;
   const isCollapsed = collapsed.has(collection.id);
   const [dragOver, setDragOver] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  // 把拖动的分类插入到当前分类之前，得到同层新顺序
+  const computeReorder = (draggedId: number): number[] | null => {
+    if (draggedId === collection.id) return null;
+    const ordered = siblings.map((s) => s.id).filter((id) => id !== draggedId);
+    const targetIndex = ordered.indexOf(collection.id);
+    if (targetIndex === -1) return null;
+    ordered.splice(targetIndex, 0, draggedId);
+    return ordered;
+  };
   return <>
     <div
-      className={`tree-item drop-target ${activeId === collection.id ? 'active' : ''} ${dragOver ? 'drag-over' : ''}`}
+      className={`tree-item drop-target ${activeId === collection.id ? 'active' : ''} ${dragOver ? 'drag-over' : ''} ${dragging ? 'dragging' : ''}`}
       style={{ paddingLeft: 12 + depth * 15 }}
       onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
@@ -54,8 +65,14 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
         event.preventDefault();
         setDragOver(false);
         const data = event.dataTransfer.getData('text/plain');
-        const bookmarkId = Number(data);
-        if (bookmarkId && onDropBookmark) onDropBookmark(collection.id, bookmarkId);
+        if (data.startsWith('collection:')) {
+          const draggedId = Number(data.slice('collection:'.length));
+          const ordered = computeReorder(draggedId);
+          if (ordered && onReorderCollection) onReorderCollection(collection.parentId, ordered);
+        } else {
+          const bookmarkId = Number(data);
+          if (bookmarkId && onDropBookmark) onDropBookmark(collection.id, bookmarkId);
+        }
       }}
     >
       {hasChildren
@@ -63,7 +80,7 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
           {isCollapsed ? '▸' : '▾'}
         </button>
         : <span className="collapse-toggle" />}
-      <button className="tree-main" onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} title="双击重命名">
+      <button className="tree-main" draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', `collection:${collection.id}`); event.dataTransfer.effectAllowed = 'move'; setDragging(true); }} onDragEnd={() => setDragging(false)} onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} title="双击重命名，拖拽排序">
         <span>{collection.icon ?? '📁'}</span><span className="tree-name">{collection.name}</span><small>{collection.bookmarkCount}</small>
       </button>
       <span className="tree-actions">
@@ -71,7 +88,7 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
         <button onClick={() => onDelete(collection)} title="删除分类">×</button>
       </span>
     </div>
-    {!isCollapsed && collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} collapsed={collapsed} onToggle={onToggle} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} onDropBookmark={onDropBookmark} />)}
+    {!isCollapsed && collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} collapsed={collapsed} onToggle={onToggle} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} onDropBookmark={onDropBookmark} onReorderCollection={onReorderCollection} siblings={collection.children} />)}
   </>;
 }
 
@@ -116,7 +133,7 @@ export function Sidebar(props: Props) {
     <section className="side-section collection-section">
       <div className="section-title"><span>分类</span><button onClick={() => props.onCreateCollection(null)} title="新建根分类">+</button></div>
       <div className="collection-tree">
-        {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} collapsed={collapsed} onToggle={toggleCollapsed} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} onDropBookmark={props.onDropBookmark} />)}
+        {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} collapsed={collapsed} onToggle={toggleCollapsed} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} onDropBookmark={props.onDropBookmark} onReorderCollection={props.onReorderCollection} siblings={props.collections} />)}
       </div>
     </section>
 

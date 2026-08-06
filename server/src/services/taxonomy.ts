@@ -101,6 +101,26 @@ export function deleteCollection(id: number): void {
   });
 }
 
+/**
+ * 按 orderedIds 顺序重写同一父分类下子分类的 sort_order。
+ * 校验：所有 id 必须属于该 parent 且无遗漏、无多余。
+ */
+export function reorderCollections(parentId: number | null, orderedIds: number[]): void {
+  const sql = parentId === null
+    ? 'SELECT id FROM collections WHERE user_id=1 AND parent_id IS NULL'
+    : 'SELECT id FROM collections WHERE user_id=1 AND parent_id=?';
+  const existing = (db.prepare(sql).all(...(parentId === null ? [] : [parentId])) as Array<{ id: number }>).map((r) => r.id);
+  const existingSet = new Set(existing);
+  if (existing.length !== orderedIds.length) throw new AppError(422, 'INVALID_REORDER', '排序数量与同层分类数量不一致');
+  for (const id of orderedIds) {
+    if (!existingSet.has(id)) throw new AppError(422, 'INVALID_REORDER', '存在不属于该层的分类 id');
+  }
+  inTransaction(() => {
+    const stmt = db.prepare('UPDATE collections SET sort_order=?, updated_at=? WHERE id=?');
+    orderedIds.forEach((id, index) => stmt.run(index, now(), id));
+  });
+}
+
 export function listTags(): Tag[] {
   return db.prepare(`
     SELECT t.id, t.name, t.color, COUNT(b.id) AS count
