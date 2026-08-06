@@ -35,7 +35,10 @@ export function Toolbar({ query, sort, total, view, showHomeToggle, onQueryChang
         <button className={view === 'grid' ? 'active' : ''} onClick={() => onViewChange?.('grid')} title="网格视图">▦</button>
       </div>
       <button className="button secondary" onClick={onImport}>⇧ 导入</button>
-      <a className="button secondary" href="/api/export">⇩ 导出</a>
+      <div className="export-menu">
+        <a className="button secondary" href="/api/export">⇩ 导出 JSON</a>
+        <a className="button secondary" href="/api/export?format=html" title="导出为浏览器可导入的 HTML">HTML</a>
+      </div>
       <button className="button primary" onClick={onAdd}>+ 添加书签</button>
     </div>
   </header>;

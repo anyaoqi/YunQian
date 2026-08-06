@@ -6,9 +6,10 @@ import { batchDeleteSchema, batchMoveSchema, batchTagsSchema, bookmarkCreateSche
   collectionUpdateSchema, fetchTitleSchema, idParamSchema, importBodySchema, refetchBatchSchema, reorderSchema, tagCreateSchema,
 } from '../lib/validators.js';
 import { batchAddTags, batchDeleteBookmarks, batchMoveBookmarks, createBookmark, deleteBookmark, emptyTrash, getBookmark, getStats, listBookmarks, listTrashedBookmarks, permanentlyDeleteBookmark, restoreBookmark, updateBookmark, visitBookmark } from '../services/bookmarks.js';
+import { parsePocketHtml, parseRaindropCsv, parseTobyJson } from '../lib/importers.js';
 import { enqueueBatchRefetch, fetchMetadata, refetchBookmark } from '../services/metadata.js';
 import { createCollection, createTag, deleteCollection, deleteTag, listCollections, listTags, mergeTags, reorderCollections, updateCollection, updateTag, cleanOrphanTags } from '../services/taxonomy.js';
-import { buildExport, importNetscapeHtml } from '../services/transfer.js';
+import { buildExport, buildHtmlExport, importBookmarks, importNetscapeHtml } from '../services/transfer.js';
 
 export const apiRouter = Router();
 
@@ -16,13 +17,31 @@ apiRouter.get('/health', (_req, res) => res.json({ ok: true }));
 apiRouter.get('/stats', (_req, res) => res.json(getStats()));
 apiRouter.post('/import', text({ type: 'text/plain', limit: '20mb' }), asyncHandler((req, res) => {
   const payload = typeof req.body === 'string' ? { html: req.body } : req.body;
-  const result = importNetscapeHtml(importBodySchema.parse(payload));
+  const input = importBodySchema.parse(payload);
+  const format = (input.format ?? 'netscape') as 'netscape' | 'raindrop' | 'toby' | 'pocket';
+  const options = { collectionId: input.collectionId, mode: input.mode };
+  let result;
+  if (format === 'netscape') {
+    result = importNetscapeHtml({ html: input.html, ...options });
+  } else if (format === 'raindrop') {
+    result = importBookmarks(parseRaindropCsv(input.html), options);
+  } else if (format === 'toby') {
+    result = importBookmarks(parseTobyJson(input.html), options);
+  } else {
+    result = importBookmarks(parsePocketHtml(input.html), options);
+  }
   // 导入完成后后台补抓缺失的封面与描述，不阻塞响应
   enqueueBatchRefetch();
   res.json(result);
 }));
-apiRouter.get('/export', (_req, res) => {
+apiRouter.get('/export', (req, res) => {
   const date = new Date().toISOString().slice(0, 10);
+  if (req.query.format === 'html') {
+    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+    res.setHeader('Content-Disposition', `attachment; filename="linknest-export-${date}.html"`);
+    res.send(buildHtmlExport());
+    return;
+  }
   res.setHeader('Content-Disposition', `attachment; filename="linknest-export-${date}.json"`);
   res.json(buildExport());
 });

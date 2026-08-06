@@ -50,6 +50,7 @@ export const fetchTitleSchema = z.object({ url: z.string().trim().min(1).max(4_0
 
 export const importBodySchema = z.object({
   html: z.string().min(1).max(20 * 1024 * 1024),
+  format: z.enum(['netscape', 'raindrop', 'toby', 'pocket']).optional().default('netscape'),
   collectionId: z.number().int().positive().nullable().optional(),
   mode: z.enum(['skip', 'overwrite']).optional().default('skip'),
 });
