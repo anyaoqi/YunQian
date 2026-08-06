@@ -5,6 +5,7 @@ import { BatchDialog } from './components/BatchDialog';
 import { BookmarkDialog } from './components/BookmarkDialog';
 import { BookmarkList } from './components/BookmarkList';
 import { GridView } from './components/GridView';
+import { HomePanel } from './components/HomePanel';
 import { ImportDialog } from './components/ImportDialog';
 import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
@@ -18,12 +19,12 @@ const VALID_SORTS = ['newest', 'oldest', 'title', 'popular'] as const;
 const defaultFilters: BookmarkFilters = { sort: 'newest', page: 1, pageSize: 24, direct: 'true' };
 
 const LIST_VIEW_KEY = 'linknest:view-mode';
-function loadViewMode(): 'list' | 'grid' {
+function loadViewMode(): 'list' | 'grid' | 'home' {
   try {
     const raw = localStorage.getItem(LIST_VIEW_KEY);
-    if (raw === 'grid') return 'grid';
+    if (raw === 'grid' || raw === 'home') return raw;
   } catch { /* ignore */ }
-  return 'list';
+  return 'home';
 }
 
 function loadView(): BookmarkFilters {
@@ -75,7 +76,7 @@ export default function App() {
   const [trashMode, setTrashMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [batchDialogMode, setBatchDialogMode] = useState<'move' | 'tags' | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>(loadViewMode);
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'home'>(loadViewMode);
   const [tagManageOpen, setTagManageOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -116,6 +117,8 @@ export default function App() {
   const refresh = () => setRefreshKey((value) => value + 1);
   const browsing = filters.direct === 'true';
   const favoriteMode = filters.favorite === 'true';
+  // 是否处于根级首页（无任何筛选），用于决定是否可显示导航面板
+  const atRoot = !filters.collectionId && !filters.tag && !filters.favorite && !filters.q && !trashMode;
   const breadcrumbTrail = useMemo(
     () => (typeof filters.collectionId === 'number' ? pathToCategory(collections, filters.collectionId) : []),
     [collections, filters.collectionId],
@@ -228,7 +231,7 @@ export default function App() {
       {trashMode
         ? <TrashList onRestored={refresh} />
         : <>
-          <Toolbar query={searchText} sort={filters.sort} total={total} view={viewMode} onQueryChange={setSearchText} onSortChange={(sort) => updateFilters({ sort })} onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onViewChange={setViewMode} searchInputRef={searchInputRef} />
+          <Toolbar query={searchText} sort={filters.sort} total={total} view={viewMode} showHomeToggle={atRoot} onQueryChange={setSearchText} onSortChange={(sort) => updateFilters({ sort })} onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onViewChange={setViewMode} searchInputRef={searchInputRef} />
           <section className="content-header">
             <div>
               <nav className="breadcrumb" aria-label="分类层级">
@@ -245,7 +248,11 @@ export default function App() {
             {(filters.tag || filters.q) && <button className="filter-reset" onClick={() => { setSearchText(''); updateFilters({ tag: undefined, q: undefined, direct: 'true' }); }}>返回层级浏览 ×</button>}
           </section>
           {error && <div className="error-banner"><span>!</span>{error}<button onClick={() => setError('')}>×</button></div>}
-          {viewMode === 'grid'
+          {atRoot && viewMode === 'home'
+            ? <HomePanel
+                onVisit={(bookmark) => { void api.visitBookmark(bookmark.id).catch(() => undefined); }}
+                onShowAll={openNewBookmark} />
+            : viewMode === 'grid'
             ? <GridView bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds}
                 onAdd={openNewBookmark} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite} onRefetch={refetchSingle}
                 onTag={(tag) => updateFilters({ tag, direct: undefined })}

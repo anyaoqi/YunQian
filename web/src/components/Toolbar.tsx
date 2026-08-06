@@ -5,16 +5,17 @@ type Props = {
   query: string;
   sort: Sort;
   total: number;
-  view: 'list' | 'grid';
+  view: 'list' | 'grid' | 'home';
+  showHomeToggle?: boolean;
   onQueryChange: (value: string) => void;
   onSortChange: (value: Sort) => void;
   onAdd: () => void;
   onImport: () => void;
-  onViewChange?: (view: 'list' | 'grid') => void;
+  onViewChange?: (view: 'list' | 'grid' | 'home') => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 };
 
-export function Toolbar({ query, sort, total, view, onQueryChange, onSortChange, onAdd, onImport, onViewChange, searchInputRef }: Props) {
+export function Toolbar({ query, sort, total, view, showHomeToggle, onQueryChange, onSortChange, onAdd, onImport, onViewChange, searchInputRef }: Props) {
   const fallbackRef = useRef<HTMLInputElement>(null);
   const inputRef = searchInputRef || fallbackRef;
   return <header className="toolbar">
@@ -29,6 +30,7 @@ export function Toolbar({ query, sort, total, view, onQueryChange, onSortChange,
         <option value="newest">最近添加</option><option value="oldest">最早添加</option><option value="title">标题 A–Z</option><option value="popular">访问最多</option>
       </select>
       <div className="view-toggle">
+        {showHomeToggle && <button className={view === 'home' ? 'active' : ''} onClick={() => onViewChange?.('home')} title="导航面板">⌂</button>}
         <button className={view === 'list' ? 'active' : ''} onClick={() => onViewChange?.('list')} title="列表视图">≣</button>
         <button className={view === 'grid' ? 'active' : ''} onClick={() => onViewChange?.('grid')} title="网格视图">▦</button>
       </div>
