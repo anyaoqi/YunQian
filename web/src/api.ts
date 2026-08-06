@@ -37,11 +37,14 @@ export const api = {
   createCollection: (payload: { name: string; parentId?: number | null }) => request<Collection>('/collections', json('POST', payload)),
   updateCollection: (id: number, payload: { name?: string; parentId?: number | null }) => request<Collection>(`/collections/${id}`, json('PATCH', payload)),
   deleteCollection: (id: number) => request<void>(`/collections/${id}`, { method: 'DELETE' }),
+  reorderCollections: (parentId: number | null, orderedIds: number[]) => request<{ ok: boolean }>('/collections/reorder', json('POST', { parentId, orderedIds })),
   deleteTag: (id: number) => request<void>(`/tags/${id}`, { method: 'DELETE' }),
   updateTag: (id: number, payload: { name?: string; color?: string | null }) => request<Tag>(`/tags/${id}`, json('PATCH', payload)),
   mergeTags: (sourceId: number, targetId: number) => request<{ moved: number }>(`/tags/${sourceId}/merge/${targetId}`, { method: 'POST' }),
   cleanOrphanTags: () => request<{ deleted: number }>('/tags/clean-orphans', { method: 'POST' }),
   fetchTitle: (url: string) => request<{ title: string | null; description: string | null; coverUrl: string | null; faviconUrl: string | null }>('/fetch-title', json('POST', { url })),
+  refetchBookmark: (id: number) => request<Bookmark>(`/bookmarks/${id}/refetch`, { method: 'POST' }),
+  refetchBatch: (limit?: number) => request<{ queued: number }>('/bookmarks/refetch', json('POST', limit ? { limit } : {})),
   importHtml: async (file: File, mode: 'skip' | 'overwrite' = 'skip') => {
     const html = await file.text();
     return request<ImportResult>('/import', json('POST', { html, mode }));

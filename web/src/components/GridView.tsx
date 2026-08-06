@@ -11,6 +11,7 @@ type Props = {
   onEdit: (bookmark: Bookmark) => void;
   onDelete: (bookmark: Bookmark) => void;
   onFavorite: (bookmark: Bookmark) => void;
+  onRefetch: (bookmark: Bookmark) => void;
   onVisit: (bookmark: Bookmark) => void;
   onTag: (tag: string) => void;
   onAdd: () => void;
@@ -32,7 +33,7 @@ function subtreeTotal(category: Collection, favoriteMode: boolean): number {
 }
 
 export function GridView(props: Props) {
-  const { bookmarks, categories, browsing, favoriteMode, loading, selectedIds, onEdit, onDelete, onFavorite, onVisit, onTag, onAdd, onOpenCategory, onToggleSelect } = props;
+  const { bookmarks, categories, browsing, favoriteMode, loading, selectedIds, onEdit, onDelete, onFavorite, onRefetch, onVisit, onTag, onAdd, onOpenCategory, onToggleSelect } = props;
   if (loading) return <div className="content-state"><span className="loader" />正在加载…</div>;
   if (bookmarks.length === 0 && categories.length === 0) return <div className="content-state empty-state">
     <div className="empty-icon">⌘</div><h2>这里还没有内容</h2><p>添加一个常用网址，或者导入浏览器已有的收藏。</p><button className="button primary" onClick={onAdd}>+ 添加第一条书签</button>
@@ -71,6 +72,7 @@ export function GridView(props: Props) {
       </div>
       <div className="grid-actions">
         <button className={bookmark.isFavorite ? 'favorite active' : 'favorite'} onClick={() => onFavorite(bookmark)} title={bookmark.isFavorite ? '取消星标' : '标记星标'}>★</button>
+        <button onClick={() => onRefetch(bookmark)} title="重新抓取封面与描述">↻</button>
         <button onClick={() => onEdit(bookmark)} title="编辑">✎</button>
         <button onClick={() => onDelete(bookmark)} title="删除">×</button>
       </div>

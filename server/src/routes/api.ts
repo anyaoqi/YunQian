@@ -1,21 +1,14 @@
 import { Router, text } from 'express';
 import { z } from 'zod';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { faviconFor, isSafePublicHttpUrl, normalizeUrl } from '../lib/url.js';
+import { isSafePublicHttpUrl, normalizeUrl } from '../lib/url.js';
 import { batchDeleteSchema, batchMoveSchema, batchTagsSchema, bookmarkCreateSchema, bookmarkListSchema, bookmarkUpdateSchema, collectionCreateSchema,
-  collectionUpdateSchema, fetchTitleSchema, idParamSchema, importBodySchema, tagCreateSchema,
+  collectionUpdateSchema, fetchTitleSchema, idParamSchema, importBodySchema, refetchBatchSchema, reorderSchema, tagCreateSchema,
 } from '../lib/validators.js';
 import { batchAddTags, batchDeleteBookmarks, batchMoveBookmarks, createBookmark, deleteBookmark, emptyTrash, getBookmark, getStats, listBookmarks, listTrashedBookmarks, permanentlyDeleteBookmark, restoreBookmark, updateBookmark, visitBookmark } from '../services/bookmarks.js';
-import { createCollection, createTag, deleteCollection, deleteTag, listCollections, listTags, mergeTags, updateCollection, updateTag, cleanOrphanTags } from '../services/taxonomy.js';
+import { enqueueBatchRefetch, fetchMetadata, refetchBookmark } from '../services/metadata.js';
+import { createCollection, createTag, deleteCollection, deleteTag, listCollections, listTags, mergeTags, reorderCollections, updateCollection, updateTag, cleanOrphanTags } from '../services/taxonomy.js';
 import { buildExport, importNetscapeHtml } from '../services/transfer.js';
-
-function decodeHtml(text: string): string {
-  return text
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
-}
 
 export const apiRouter = Router();
 
@@ -23,7 +16,10 @@ apiRouter.get('/health', (_req, res) => res.json({ ok: true }));
 apiRouter.get('/stats', (_req, res) => res.json(getStats()));
 apiRouter.post('/import', text({ type: 'text/plain', limit: '20mb' }), asyncHandler((req, res) => {
   const payload = typeof req.body === 'string' ? { html: req.body } : req.body;
-  res.json(importNetscapeHtml(importBodySchema.parse(payload)));
+  const result = importNetscapeHtml(importBodySchema.parse(payload));
+  // 导入完成后后台补抓缺失的封面与描述，不阻塞响应
+  enqueueBatchRefetch();
+  res.json(result);
 }));
 apiRouter.get('/export', (_req, res) => {
   const date = new Date().toISOString().slice(0, 10);
@@ -64,6 +60,14 @@ apiRouter.post('/bookmarks/batch/delete', asyncHandler((req, res) => {
   res.json(batchDeleteBookmarks(input.ids));
 }));
 
+apiRouter.post('/bookmarks/refetch', asyncHandler((req, res) => {
+  const input = refetchBatchSchema.parse(req.body ?? {});
+  res.json(enqueueBatchRefetch(input.limit));
+}));
+apiRouter.post('/bookmarks/:id/refetch', asyncHandler(async (req, res) => {
+  res.json(await refetchBookmark(idParamSchema.parse(req.params).id));
+}));
+
 apiRouter.get('/trash', (_req, res) => {
   res.json(listTrashedBookmarks());
 });
@@ -90,6 +94,11 @@ apiRouter.delete('/collections/:id', asyncHandler((req, res) => {
   deleteCollection(idParamSchema.parse(req.params).id);
   res.status(204).end();
 }));
+apiRouter.post('/collections/reorder', asyncHandler((req, res) => {
+  const input = reorderSchema.parse(req.body);
+  reorderCollections(input.parentId, input.orderedIds);
+  res.json({ ok: true });
+}));
 
 apiRouter.get('/tags', (_req, res) => res.json(listTags()));
 apiRouter.post('/tags', asyncHandler((req, res) => {
@@ -112,30 +121,11 @@ apiRouter.delete('/tags/:id', asyncHandler((req, res) => {
 
 apiRouter.post('/fetch-title', asyncHandler(async (req, res) => {
   if (process.env.DISABLE_FETCH_TITLE === '1') {
-    res.json({ title: null, faviconUrl: null, description: null, coverUrl: null });
+    res.json({ title: null, description: null, coverUrl: null, faviconUrl: null });
     return;
   }
   const input = fetchTitleSchema.parse(req.body);
   const url = normalizeUrl(input.url);
   if (!isSafePublicHttpUrl(url)) throw new AppError(400, 'INVALID_URL', '不允许抓取本机或内网地址');
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(5_000),
-      headers: { 'User-Agent': 'LinkNest/1.0 (local bookmark manager)', Accept: 'text/html,application/xhtml+xml' },
-      redirect: 'manual',
-    });
-    const html = (await response.text()).slice(0, 512_000);
-    const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-    const title = titleMatch ? decodeHtml(titleMatch[1].replace(/\s+/g, ' ').trim()).slice(0, 500) : null;
-    const descriptionMatch = /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']|<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i.exec(html);
-    const description = descriptionMatch ? decodeHtml((descriptionMatch[1] || descriptionMatch[2]).replace(/\s+/g, ' ').trim()).slice(0, 1_000) : null;
-    const coverMatch = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']|<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(html);
-    let coverUrl = coverMatch ? (coverMatch[1] || coverMatch[2]).trim() : null;
-    if (coverUrl && !/^https?:\/\//i.test(coverUrl)) {
-      try { coverUrl = new URL(coverUrl, url).href; } catch { coverUrl = null; }
-    }
-    res.json({ title: title || null, description, coverUrl, faviconUrl: faviconFor(url) });
-  } catch {
-    res.json({ title: null, description: null, coverUrl: null, faviconUrl: faviconFor(url) });
-  }
+  res.json(await fetchMetadata(url));
 }));

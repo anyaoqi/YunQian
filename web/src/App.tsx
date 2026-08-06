@@ -172,6 +172,12 @@ export default function App() {
     try { await api.updateBookmark(bookmark.id, { isFavorite: !bookmark.isFavorite }); refresh(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '更新星标失败'); }
   };
+  const refetchSingle = async (bookmark: Bookmark) => {
+    try {
+      const updated = await api.refetchBookmark(bookmark.id);
+      setItems((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '重新抓取失败'); }
+  };
 
   const selectedBookmark = useMemo(() => items.find((b) => selectedIds.has(b.id)), [items, selectedIds]);
   useEffect(() => { try { localStorage.setItem(LIST_VIEW_KEY, viewMode); } catch { /* ignore */ } }, [viewMode]);
@@ -213,6 +219,10 @@ export default function App() {
       onDropBookmark={async (collectionId, bookmarkId) => {
         try { await api.updateBookmark(bookmarkId, { collectionId }); refresh(); }
         catch (reason) { setError(reason instanceof Error ? reason.message : '移动失败'); }
+      }}
+      onReorderCollection={async (parentId, orderedIds) => {
+        try { await api.reorderCollections(parentId, orderedIds); refresh(); }
+        catch (reason) { setError(reason instanceof Error ? reason.message : '排序失败'); }
       }} />
     <main className="main-content">
       {trashMode
@@ -237,13 +247,13 @@ export default function App() {
           {error && <div className="error-banner"><span>!</span>{error}<button onClick={() => setError('')}>×</button></div>}
           {viewMode === 'grid'
             ? <GridView bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds}
-                onAdd={openNewBookmark} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite}
+                onAdd={openNewBookmark} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite} onRefetch={refetchSingle}
                 onTag={(tag) => updateFilters({ tag, direct: undefined })}
                 onVisit={(bookmark) => { void api.visitBookmark(bookmark.id).catch(() => undefined); }}
                 onOpenCategory={(category) => updateFilters({ collectionId: category.id, tag: undefined, direct: 'true' })}
                 onToggleSelect={toggleSelect} />
             : <BookmarkList bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds}
-                onAdd={openNewBookmark} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite}
+                onAdd={openNewBookmark} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite} onRefetch={refetchSingle}
                 onTag={(tag) => updateFilters({ tag, direct: undefined })}
                 onVisit={(bookmark) => { void api.visitBookmark(bookmark.id).catch(() => undefined); }}
                 onOpenCategory={(category) => updateFilters({ collectionId: category.id, tag: undefined, direct: 'true' })}

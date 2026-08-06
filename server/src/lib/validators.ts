@@ -67,3 +67,12 @@ export const batchTagsSchema = z.object({
 export const batchDeleteSchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(200),
 });
+
+export const refetchBatchSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(200),
+});
+
+export const reorderSchema = z.object({
+  parentId: z.number().int().positive().nullable(),
+  orderedIds: z.array(z.number().int().positive()).min(1).max(200),
+});
