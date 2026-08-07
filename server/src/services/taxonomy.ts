@@ -70,7 +70,7 @@ function isDescendant(candidateId: number, ancestorId: number): boolean {
   return Boolean(row);
 }
 
-export function updateCollection(id: number, input: Partial<{ name: string; parentId: number | null; icon: string | null; color: string | null }>): Collection {
+export function updateCollection(id: number, input: Partial<{ name: string; parentId: number | null; icon: string | null; color: string | null; sortOrder: number }>): Collection {
   const current = getCollectionRow(id);
   if (!current) throw notFound('分类');
   const parentId = input.parentId === undefined ? current.parentId : input.parentId;
@@ -80,9 +80,11 @@ export function updateCollection(id: number, input: Partial<{ name: string; pare
   assertParentExists(parentId);
   const name = input.name ?? current.name;
   assertSiblingNameAvailable(name, parentId, id);
-  db.prepare(`UPDATE collections SET name=?, parent_id=?, icon=?, color=?, updated_at=? WHERE id=?`).run(
+  db.prepare(`UPDATE collections SET name=?, parent_id=?, icon=?, color=?, sort_order=?, updated_at=? WHERE id=?`).run(
     name, parentId, input.icon === undefined ? current.icon : input.icon,
-    input.color === undefined ? current.color : input.color, now(), id,
+    input.color === undefined ? current.color : input.color,
+    input.sortOrder === undefined ? current.sortOrder : input.sortOrder,
+    now(), id,
   );
   const row = getCollectionRow(id);
   if (!row) throw new Error('Collection update failed');
@@ -99,9 +101,29 @@ export function deleteCollection(id: number): void {
   });
 }
 
+/**
+ * 按 orderedIds 顺序重写同一父分类下子分类的 sort_order。
+ * 校验：所有 id 必须属于该 parent 且无遗漏、无多余。
+ */
+export function reorderCollections(parentId: number | null, orderedIds: number[]): void {
+  const sql = parentId === null
+    ? 'SELECT id FROM collections WHERE user_id=1 AND parent_id IS NULL'
+    : 'SELECT id FROM collections WHERE user_id=1 AND parent_id=?';
+  const existing = (db.prepare(sql).all(...(parentId === null ? [] : [parentId])) as Array<{ id: number }>).map((r) => r.id);
+  const existingSet = new Set(existing);
+  if (existing.length !== orderedIds.length) throw new AppError(422, 'INVALID_REORDER', '排序数量与同层分类数量不一致');
+  for (const id of orderedIds) {
+    if (!existingSet.has(id)) throw new AppError(422, 'INVALID_REORDER', '存在不属于该层的分类 id');
+  }
+  inTransaction(() => {
+    const stmt = db.prepare('UPDATE collections SET sort_order=?, updated_at=? WHERE id=?');
+    orderedIds.forEach((id, index) => stmt.run(index, now(), id));
+  });
+}
+
 export function listTags(): Tag[] {
   return db.prepare(`
-    SELECT t.id, t.name, t.color, COUNT(bt.bookmark_id) AS count
+    SELECT t.id, t.name, t.color, COUNT(b.id) AS count
     FROM tags t
     LEFT JOIN bookmark_tags bt ON bt.tag_id = t.id
     LEFT JOIN bookmarks b ON b.id = bt.bookmark_id AND b.deleted_at IS NULL
@@ -119,4 +141,43 @@ export function createTag(input: { name: string; color?: string | null }): Tag {
 export function deleteTag(id: number): void {
   const result = db.prepare('DELETE FROM tags WHERE id=?').run(id);
   if (result.changes === 0) throw notFound('标签');
+}
+
+function getTagRow(id: number): Tag | undefined {
+  return db.prepare('SELECT id, name, color, 0 AS count FROM tags WHERE id=?').get(id) as Tag | undefined;
+}
+
+export function updateTag(id: number, input: Partial<{ name: string; color: string | null }>): Tag {
+  const current = getTagRow(id);
+  if (!current) throw notFound('标签');
+  const name = input.name ?? current.name;
+  const color = input.color === undefined ? current.color : input.color;
+  const existing = db.prepare('SELECT id FROM tags WHERE user_id=1 AND name=? AND id<>?').get(name, id) as { id: number } | undefined;
+  if (existing) throw new AppError(409, 'DUPLICATE_NAME', '标签名称已存在');
+  db.prepare('UPDATE tags SET name=?, color=? WHERE id=?').run(name, color, id);
+  return { ...current, name, color };
+}
+
+export function mergeTags(sourceId: number, targetId: number): { moved: number } {
+  if (sourceId === targetId) throw new AppError(422, 'INVALID_MERGE', '不能合并到自身');
+  const source = getTagRow(sourceId);
+  const target = getTagRow(targetId);
+  if (!source || !target) throw notFound('标签');
+  const existing = db.prepare('SELECT bookmark_id FROM bookmark_tags WHERE tag_id=?').all(sourceId) as Array<{ bookmark_id: number }>;
+  db.prepare('DELETE FROM bookmark_tags WHERE tag_id=?').run(sourceId);
+  let moved = 0;
+  for (const { bookmark_id: bookmarkId } of existing) {
+    const duplicate = db.prepare('SELECT 1 FROM bookmark_tags WHERE bookmark_id=? AND tag_id=?').get(bookmarkId, targetId);
+    if (!duplicate) {
+      db.prepare('INSERT INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)').run(bookmarkId, targetId);
+      moved++;
+    }
+  }
+  db.prepare('DELETE FROM tags WHERE id=?').run(sourceId);
+  return { moved };
+}
+
+export function cleanOrphanTags(): { deleted: number } {
+  const result = db.prepare(`DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM bookmark_tags)`).run();
+  return { deleted: Number(result.changes) };
 }

@@ -28,9 +28,9 @@ npm install
 npm run dev
 ```
 
-打开：<http://127.0.0.1:5173>
+打开：<http://127.0.0.1:5178>
 
-- 前端开发服务器：`http://127.0.0.1:5173`
+- 前端开发服务器：`http://127.0.0.1:5178`
 - API：`http://127.0.0.1:3001/api`
 - 数据库：`server/data/linknest.db`（首次启动自动创建）
 
@@ -46,7 +46,7 @@ npm run dev
 
 | 命令 | 说明 |
 | --- | --- |
-| `npm run dev` | 同时启动后端（3001）与前端（5173） |
+| `npm run dev` | 同时启动后端（3001）与前端（5178） |
 | `npm run dev:server` | 仅启动后端 |
 | `npm run dev:web` | 仅启动前端 |
 | `npm run typecheck` | TypeScript 类型检查 |

@@ -10,6 +10,7 @@ type BookmarkInput = {
   description?: string | null;
   note?: string | null;
   collectionId?: number | null;
+  coverUrl?: string | null;
   tags?: string[];
   isFavorite?: boolean;
 };
@@ -118,9 +119,9 @@ export function createBookmark(input: BookmarkInput): Bookmark {
   const timestamp = now();
   const id = inTransaction(() => {
     const result = db.prepare(`
-      INSERT INTO bookmarks (collection_id, url, title, description, note, favicon_url, is_favorite, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(input.collectionId ?? null, url, title, input.description ?? null, input.note ?? null, faviconFor(url), input.isFavorite ? 1 : 0, timestamp, timestamp);
+      INSERT INTO bookmarks (collection_id, url, title, description, note, favicon_url, cover_url, is_favorite, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(input.collectionId ?? null, url, title, input.description ?? null, input.note ?? null, faviconFor(url), input.coverUrl ?? null, input.isFavorite ? 1 : 0, timestamp, timestamp);
     const bookmarkId = Number(result.lastInsertRowid);
     syncBookmarkTags(bookmarkId, input.tags ?? []);
     return bookmarkId;
@@ -140,7 +141,7 @@ export function updateBookmark(id: number, input: Partial<BookmarkInput>): Bookm
   assertCollectionExists(collectionId);
   inTransaction(() => {
     db.prepare(`
-      UPDATE bookmarks SET url=?, title=?, description=?, note=?, collection_id=?, favicon_url=?, is_favorite=?, updated_at=?
+      UPDATE bookmarks SET url=?, title=?, description=?, note=?, collection_id=?, favicon_url=?, cover_url=?, is_favorite=?, updated_at=?
       WHERE id=?
     `).run(
       url,
@@ -149,6 +150,7 @@ export function updateBookmark(id: number, input: Partial<BookmarkInput>): Bookm
       input.note === undefined ? current.note : input.note,
       collectionId ?? null,
       url === current.url ? current.faviconUrl : faviconFor(url),
+      input.coverUrl === undefined ? current.coverUrl : input.coverUrl,
       input.isFavorite === undefined ? (current.isFavorite ? 1 : 0) : (input.isFavorite ? 1 : 0),
       now(), id,
     );
@@ -158,8 +160,48 @@ export function updateBookmark(id: number, input: Partial<BookmarkInput>): Bookm
 }
 
 export function deleteBookmark(id: number): void {
-  const result = db.prepare('DELETE FROM bookmarks WHERE id=?').run(id);
+  const result = db.prepare('UPDATE bookmarks SET deleted_at=?, updated_at=? WHERE id=? AND deleted_at IS NULL').run(now(), now(), id);
   if (result.changes === 0) throw notFound('书签');
+}
+
+export function listTrashedBookmarks(): Bookmark[] {
+  const rows = db.prepare(`
+    SELECT b.id, b.url, b.title, b.description, b.note, b.favicon_url AS faviconUrl,
+      b.cover_url AS coverUrl, b.is_favorite AS isFavorite, b.click_count AS clickCount,
+      b.last_visited_at AS lastVisitedAt, b.collection_id AS collectionId, c.name AS collectionName,
+      b.created_at AS createdAt, b.updated_at AS updatedAt, b.deleted_at AS deletedAt
+    FROM bookmarks b LEFT JOIN collections c ON c.id=b.collection_id
+    WHERE b.deleted_at IS NOT NULL
+    ORDER BY b.deleted_at DESC
+  `).all() as (BookmarkRow & { deletedAt: string })[];
+  const tags = getTagsForBookmarkIds(rows.map((row) => row.id));
+  const categoryPaths = getCategoryPaths(rows.flatMap((row) => row.collectionId === null ? [] : [row.collectionId]));
+  return rows.map((row) => {
+    const { deletedAt, ...rest } = row;
+    return { ...toBookmark(rest, tags.get(row.id) ?? [], row.collectionId === null ? [] : (categoryPaths.get(row.collectionId) ?? [])), deletedAt };
+  });
+}
+
+export function restoreBookmark(id: number): Bookmark {
+  const result = db.prepare('UPDATE bookmarks SET deleted_at=NULL, updated_at=? WHERE id=? AND deleted_at IS NOT NULL').run(now(), id);
+  if (result.changes === 0) throw notFound('书签');
+  return getBookmark(id);
+}
+
+export function permanentlyDeleteBookmark(id: number): void {
+  const result = db.prepare('DELETE FROM bookmarks WHERE id=? AND deleted_at IS NOT NULL').run(id);
+  if (result.changes === 0) throw notFound('书签');
+}
+
+export function emptyTrash(): { deleted: number } {
+  const result = db.prepare('DELETE FROM bookmarks WHERE deleted_at IS NOT NULL').run();
+  return { deleted: Number(result.changes) };
+}
+
+export function purgeExpiredTrash(days = 30): { deleted: number } {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const result = db.prepare('DELETE FROM bookmarks WHERE deleted_at IS NOT NULL AND deleted_at < ?').run(cutoff);
+  return { deleted: Number(result.changes) };
 }
 
 function descendantIds(collectionId: number): number[] {
@@ -226,7 +268,7 @@ export function visitBookmark(id: number): number {
   return (db.prepare('SELECT click_count AS count FROM bookmarks WHERE id=?').get(id) as { count: number }).count;
 }
 
-export function getStats(): { bookmarks: number; collections: number; tags: number; uncategorized: number; favorites: number } {
+export function getStats(): { bookmarks: number; collections: number; tags: number; uncategorized: number; favorites: number; trashed: number } {
   const count = (sql: string) => (db.prepare(sql).get() as { count: number }).count;
   return {
     bookmarks: count('SELECT COUNT(*) AS count FROM bookmarks WHERE deleted_at IS NULL'),
@@ -234,5 +276,39 @@ export function getStats(): { bookmarks: number; collections: number; tags: numb
     tags: count('SELECT COUNT(*) AS count FROM tags'),
     uncategorized: count('SELECT COUNT(*) AS count FROM bookmarks WHERE deleted_at IS NULL AND collection_id IS NULL'),
     favorites: count('SELECT COUNT(*) AS count FROM bookmarks WHERE deleted_at IS NULL AND is_favorite=1'),
+    trashed: count('SELECT COUNT(*) AS count FROM bookmarks WHERE deleted_at IS NOT NULL'),
   };
+}
+
+export function batchMoveBookmarks(ids: number[], collectionId: number | null): { updated: number } {
+  assertCollectionExists(collectionId);
+  const placeholders = ids.map(() => '?').join(',');
+  const result = db.prepare(`UPDATE bookmarks SET collection_id=?, updated_at=? WHERE id IN (${placeholders}) AND deleted_at IS NULL`).run(collectionId ?? null, now(), ...ids);
+  return { updated: Number(result.changes) };
+}
+
+export function batchAddTags(ids: number[], inputTags: string[]): { tagsCreated: number } {
+  const tags = normalizedTags(inputTags);
+  if (tags.length === 0) return { tagsCreated: 0 };
+  const timestamp = now();
+  const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name, created_at) VALUES (?, ?)');
+  const findTag = db.prepare('SELECT id FROM tags WHERE user_id=1 AND name=?');
+  const link = db.prepare('INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)');
+  let tagsCreated = 0;
+  for (const tag of tags) {
+    insertTag.run(tag, timestamp);
+    const row = findTag.get(tag) as { id: number };
+    for (const id of ids) {
+      link.run(id, row.id);
+    }
+    tagsCreated++;
+  }
+  return { tagsCreated };
+}
+
+export function batchDeleteBookmarks(ids: number[]): { updated: number } {
+  const timestamp = now();
+  const placeholders = ids.map(() => '?').join(',');
+  const result = db.prepare(`UPDATE bookmarks SET deleted_at=?, updated_at=? WHERE id IN (${placeholders}) AND deleted_at IS NULL`).run(timestamp, timestamp, ...ids);
+  return { updated: Number(result.changes) };
 }

@@ -1,86 +1,11 @@
 import { db, inTransaction, now } from '../db/index.js';
 import { AppError, notFound } from '../lib/errors.js';
+import type { ImportedBookmark } from '../lib/html.js';
+import { parseNetscapeBookmarks } from '../lib/html.js';
 import { faviconFor, normalizeUrl, titleFallback } from '../lib/url.js';
 import { syncBookmarkTags } from './bookmarks.js';
 
-type ImportedBookmark = {
-  url: string;
-  title: string;
-  description: string | null;
-  tags: string[];
-  collectionPath: string[];
-  createdAt: string | null;
-};
-
-type ImportOptions = { html: string; collectionId?: number | null; mode?: 'skip' | 'overwrite' };
-
-function decodeHtml(value: string): string {
-  return value
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([\da-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)));
-}
-
-function text(value: string): string {
-  return decodeHtml(value.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
-}
-
-function attribute(source: string, name: string): string | null {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`\\b${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(source);
-  return match ? decodeHtml(match[1] ?? match[2] ?? match[3] ?? '') : null;
-}
-
-function dateFromUnix(value: string | null): string | null {
-  if (!value || !/^\d+$/.test(value)) return null;
-  const time = Number(value) * 1000;
-  return Number.isFinite(time) && time > 0 ? new Date(time).toISOString() : null;
-}
-
-export function parseNetscapeBookmarks(html: string): ImportedBookmark[] {
-  const items: ImportedBookmark[] = [];
-  const folders: string[] = [];
-  const dlStack: boolean[] = [];
-  let pendingFolder: string | null = null;
-  let lastBookmark: ImportedBookmark | null = null;
-  const token = /<H3\b([^>]*)>([\s\S]*?)<\/H3\s*>|<A\b([^>]*)>([\s\S]*?)<\/A\s*>|<DD\b[^>]*>([^<]*)|<DL\b[^>]*>|<\/DL\s*>/gi;
-
-  for (const match of html.matchAll(token)) {
-    const raw = match[0];
-    if (/^<H3\b/i.test(raw)) {
-      pendingFolder = text(match[2] ?? '');
-      lastBookmark = null;
-    } else if (/^<DL\b/i.test(raw)) {
-      const isFolder = Boolean(pendingFolder);
-      if (pendingFolder) folders.push(pendingFolder);
-      pendingFolder = null;
-      dlStack.push(isFolder);
-      lastBookmark = null;
-    } else if (/^<\/DL/i.test(raw)) {
-      if (dlStack.pop()) folders.pop();
-      lastBookmark = null;
-    } else if (/^<A\b/i.test(raw)) {
-      const url = attribute(match[3] ?? '', 'href');
-      if (!url) continue;
-      const tags = (attribute(match[3] ?? '', 'tags') ?? '').split(',').map((tag) => text(tag)).filter(Boolean);
-      lastBookmark = {
-        url: decodeHtml(url),
-        title: text(match[4] ?? ''),
-        description: null,
-        tags,
-        collectionPath: [...folders],
-        createdAt: dateFromUnix(attribute(match[3] ?? '', 'add_date')),
-      };
-      items.push(lastBookmark);
-    } else if (/^<DD\b/i.test(raw) && lastBookmark) {
-      const description = text(match[5] ?? '');
-      if (description) lastBookmark.description = description;
-    }
-  }
-  return items;
-}
+type ImportOptions = { collectionId?: number | null; mode?: 'skip' | 'overwrite' };
 
 function assertCollection(id: number | null | undefined): void {
   if (id === null || id === undefined) return;
@@ -105,19 +30,23 @@ function collectionIdForPath(path: string[], rootId: number | null, created: { v
   return parentId;
 }
 
-export function importNetscapeHtml(options: ImportOptions): { imported: number; skipped: number; collectionsCreated: number; tagsCreated: number; durationMs: number } {
-  const startedAt = Date.now();
+export function importNetscapeHtml(options: { html: string; collectionId?: number | null; mode?: 'skip' | 'overwrite' }): { imported: number; skipped: number; collectionsCreated: number; tagsCreated: number; durationMs: number } {
   const html = options.html.trim();
   if (!/<(?:DL|A|H3)\b/i.test(html)) throw new AppError(400, 'BAD_IMPORT_FILE', '这不是可识别的浏览器书签 HTML 文件');
   const parsed = parseNetscapeBookmarks(html);
   if (parsed.length === 0) throw new AppError(400, 'BAD_IMPORT_FILE', '未在文件中找到可导入的 http(s) 书签');
-  assertCollection(options.collectionId);
+  return importBookmarks(parsed, { collectionId: options.collectionId, mode: options.mode });
+}
 
+/** 通用导入：接收已解析的书签条目，写入数据库。供各格式导入器复用。 */
+export function importBookmarks(entries: ImportedBookmark[], options: ImportOptions): { imported: number; skipped: number; collectionsCreated: number; tagsCreated: number; durationMs: number } {
+  const startedAt = Date.now();
+  assertCollection(options.collectionId);
   const stats = { imported: 0, skipped: 0, collectionsCreated: 0, tagsCreated: 0 };
   const knownTags = new Set((db.prepare('SELECT name FROM tags WHERE user_id=1').all() as Array<{ name: string }>).map((tag) => tag.name));
   const createdCollections = { value: 0 };
   inTransaction(() => {
-    for (const entry of parsed) {
+    for (const entry of entries) {
       let url: string;
       try { url = normalizeUrl(entry.url); } catch { stats.skipped += 1; continue; }
       const existing = db.prepare('SELECT id FROM bookmarks WHERE user_id=1 AND url=?').get(url) as { id: number } | undefined;
@@ -162,4 +91,55 @@ export function buildExport(): object {
   for (const row of tagRows) (tagsByBookmark.get(row.bookmarkId) ?? tagsByBookmark.set(row.bookmarkId, []).get(row.bookmarkId)!).push(row.name);
   const bookmarks = rows.map((bookmark) => ({ ...bookmark, isFavorite: Boolean(bookmark.isFavorite), tags: tagsByBookmark.get(bookmark.id) ?? [] }));
   return { version: 1, exportedAt: now(), collections, tags, bookmarks };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * 导出为 Netscape bookmarks.html 格式，可被 Chrome/Edge/Firefox/Safari 导入。
+ */
+export function buildHtmlExport(): string {
+  type CollectionRow = { id: number; name: string; parentId: number | null };
+  type BookmarkRow = { id: number; url: string; title: string; description: string | null; collectionId: number | null; createdAt: string; tags: string[] };
+  const collections = db.prepare('SELECT id, name, parent_id AS parentId FROM collections ORDER BY sort_order ASC, name ASC').all() as CollectionRow[];
+  const rows = db.prepare(`
+    SELECT id, url, title, description, collection_id AS collectionId, created_at AS createdAt
+    FROM bookmarks WHERE deleted_at IS NULL ORDER BY created_at DESC
+  `).all() as Array<Omit<BookmarkRow, 'tags'>>;
+  const tagRows = db.prepare(`SELECT bt.bookmark_id AS bookmarkId, t.name FROM bookmark_tags bt JOIN tags t ON t.id=bt.tag_id ORDER BY t.name`).all() as Array<{ bookmarkId: number; name: string }>;
+  const tagsByBookmark = new Map<number, string[]>();
+  for (const row of tagRows) (tagsByBookmark.get(row.bookmarkId) ?? tagsByBookmark.set(row.bookmarkId, []).get(row.bookmarkId)!).push(row.name);
+  const bookmarks: BookmarkRow[] = rows.map((row) => ({ ...row, tags: tagsByBookmark.get(row.id) ?? [] }));
+
+  const childrenOf = (parentId: number | null) => collections.filter((c) => c.parentId === parentId);
+  const bookmarksOf = (collectionId: number | null) => bookmarks.filter((b) => b.collectionId === collectionId);
+
+  const renderFolder = (collection: CollectionRow, depth: number): string => {
+    const indent = '    '.repeat(depth);
+    const addDate = Math.floor(Date.now() / 1000);
+    let out = `${indent}<DT><H3 ADD_DATE="${addDate}">${escapeHtml(collection.name)}</H3>\n`;
+    out += `${indent}<DL><p>\n`;
+    for (const child of childrenOf(collection.id)) out += renderFolder(child, depth + 1);
+    for (const bookmark of bookmarksOf(collection.id)) {
+      const tags = bookmark.tags.length > 0 ? ` TAGS="${escapeHtml(bookmark.tags.join(','))}"` : '';
+      const date = Math.floor(new Date(bookmark.createdAt).getTime() / 1000) || addDate;
+      out += `${indent}    <DT><A HREF="${escapeHtml(bookmark.url)}" ADD_DATE="${date}"${tags}>${escapeHtml(bookmark.title)}</A>\n`;
+      if (bookmark.description) out += `${indent}    <DD>${escapeHtml(bookmark.description)}\n`;
+    }
+    out += `${indent}</DL><p>\n`;
+    return out;
+  };
+
+  let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>LinkNest 导出</TITLE>\n<H1>LinkNest 书签</H1>\n<DL><p>\n';
+  for (const root of childrenOf(null)) html += renderFolder(root, 1);
+  for (const bookmark of bookmarksOf(null)) {
+    const tags = bookmark.tags.length > 0 ? ` TAGS="${escapeHtml(bookmark.tags.join(','))}"` : '';
+    const date = Math.floor(new Date(bookmark.createdAt).getTime() / 1000) || Math.floor(Date.now() / 1000);
+    html += `    <DT><A HREF="${escapeHtml(bookmark.url)}" ADD_DATE="${date}"${tags}>${escapeHtml(bookmark.title)}</A>\n`;
+    if (bookmark.description) html += `    <DD>${escapeHtml(bookmark.description)}\n`;
+  }
+  html += '</DL><p>\n';
+  return html;
 }

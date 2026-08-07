@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "description": "LinkNest - 本地优先的网址导航知识库",
   "type": "module",
-  "workspaces": ["server", "web"],
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev": "concurrently -n server,web -c cyan,magenta \"npm run dev:server\" \"npm run dev:web\"",
     "dev:server": "npm --workspace @linknest/server run dev",
@@ -19,5 +22,6 @@
   },
   "engines": {
     "node": ">=22.5.0"
-  }
+  },
+  "packageManager": "pnpm@11.20.0+sha512.9a6f330a95b66446ea088faf1521405a8a01f07fde7124cc9958dfed52d4bb436737e65b08f85f37b46fcba375092558ac51262b816844b22f63406ed166bfee"
 }

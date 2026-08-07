@@ -30,7 +30,7 @@ export type Collection = {
 };
 
 export type Tag = { id: number; name: string; color: string | null; count: number };
-export type Stats = { bookmarks: number; collections: number; tags: number; uncategorized: number; favorites: number };
+export type Stats = { bookmarks: number; collections: number; tags: number; uncategorized: number; favorites: number; trashed: number };
 export type Sort = 'newest' | 'oldest' | 'title' | 'popular';
 export type BookmarkFilters = {
   q?: string;
@@ -48,8 +48,10 @@ export type BookmarkPayload = {
   description?: string | null;
   note?: string | null;
   collectionId?: number | null;
+  coverUrl?: string | null;
   tags?: string[];
   isFavorite?: boolean;
 };
 export type PaginatedBookmarks = { items: Bookmark[]; total: number; page: number; pageSize: number };
 export type ImportResult = { imported: number; skipped: number; collectionsCreated: number; tagsCreated: number; durationMs: number };
+export type TrashedBookmark = Bookmark & { deletedAt: string };

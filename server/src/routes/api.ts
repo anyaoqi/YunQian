@@ -1,21 +1,15 @@
 import { Router, text } from 'express';
+import { z } from 'zod';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { faviconFor, isSafePublicHttpUrl, normalizeUrl } from '../lib/url.js';
-import {
-  bookmarkCreateSchema, bookmarkListSchema, bookmarkUpdateSchema, collectionCreateSchema,
-  collectionUpdateSchema, fetchTitleSchema, idParamSchema, importBodySchema, tagCreateSchema,
+import { isSafePublicHttpUrl, normalizeUrl } from '../lib/url.js';
+import { batchDeleteSchema, batchMoveSchema, batchTagsSchema, bookmarkCreateSchema, bookmarkListSchema, bookmarkUpdateSchema, collectionCreateSchema,
+  collectionUpdateSchema, fetchTitleSchema, idParamSchema, importBodySchema, refetchBatchSchema, reorderSchema, tagCreateSchema,
 } from '../lib/validators.js';
-import { createBookmark, deleteBookmark, getBookmark, getStats, listBookmarks, updateBookmark, visitBookmark } from '../services/bookmarks.js';
-import { createCollection, createTag, deleteCollection, deleteTag, listCollections, listTags, updateCollection } from '../services/taxonomy.js';
-import { buildExport, importNetscapeHtml } from '../services/transfer.js';
-
-function decodeHtml(text: string): string {
-  return text
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
-}
+import { batchAddTags, batchDeleteBookmarks, batchMoveBookmarks, createBookmark, deleteBookmark, emptyTrash, getBookmark, getStats, listBookmarks, listTrashedBookmarks, permanentlyDeleteBookmark, restoreBookmark, updateBookmark, visitBookmark } from '../services/bookmarks.js';
+import { parsePocketHtml, parseRaindropCsv, parseTobyJson } from '../lib/importers.js';
+import { enqueueBatchRefetch, fetchMetadata, refetchBookmark } from '../services/metadata.js';
+import { createCollection, createTag, deleteCollection, deleteTag, listCollections, listTags, mergeTags, reorderCollections, updateCollection, updateTag, cleanOrphanTags } from '../services/taxonomy.js';
+import { buildExport, buildHtmlExport, importBookmarks, importNetscapeHtml } from '../services/transfer.js';
 
 export const apiRouter = Router();
 
@@ -23,10 +17,31 @@ apiRouter.get('/health', (_req, res) => res.json({ ok: true }));
 apiRouter.get('/stats', (_req, res) => res.json(getStats()));
 apiRouter.post('/import', text({ type: 'text/plain', limit: '20mb' }), asyncHandler((req, res) => {
   const payload = typeof req.body === 'string' ? { html: req.body } : req.body;
-  res.json(importNetscapeHtml(importBodySchema.parse(payload)));
+  const input = importBodySchema.parse(payload);
+  const format = (input.format ?? 'netscape') as 'netscape' | 'raindrop' | 'toby' | 'pocket';
+  const options = { collectionId: input.collectionId, mode: input.mode };
+  let result;
+  if (format === 'netscape') {
+    result = importNetscapeHtml({ html: input.html, ...options });
+  } else if (format === 'raindrop') {
+    result = importBookmarks(parseRaindropCsv(input.html), options);
+  } else if (format === 'toby') {
+    result = importBookmarks(parseTobyJson(input.html), options);
+  } else {
+    result = importBookmarks(parsePocketHtml(input.html), options);
+  }
+  // 导入完成后后台补抓缺失的封面与描述，不阻塞响应
+  enqueueBatchRefetch();
+  res.json(result);
 }));
-apiRouter.get('/export', (_req, res) => {
+apiRouter.get('/export', (req, res) => {
   const date = new Date().toISOString().slice(0, 10);
+  if (req.query.format === 'html') {
+    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+    res.setHeader('Content-Disposition', `attachment; filename="linknest-export-${date}.html"`);
+    res.send(buildHtmlExport());
+    return;
+  }
   res.setHeader('Content-Disposition', `attachment; filename="linknest-export-${date}.json"`);
   res.json(buildExport());
 });
@@ -51,6 +66,41 @@ apiRouter.delete('/bookmarks/:id', asyncHandler((req, res) => {
 apiRouter.post('/bookmarks/:id/visit', asyncHandler((req, res) => {
   res.json({ clickCount: visitBookmark(idParamSchema.parse(req.params).id) });
 }));
+apiRouter.post('/bookmarks/batch/move', asyncHandler((req, res) => {
+  const input = batchMoveSchema.parse(req.body);
+  res.json(batchMoveBookmarks(input.ids, input.collectionId ?? null));
+}));
+apiRouter.post('/bookmarks/batch/tags', asyncHandler((req, res) => {
+  const input = batchTagsSchema.parse(req.body);
+  res.json(batchAddTags(input.ids, input.tags));
+}));
+apiRouter.post('/bookmarks/batch/delete', asyncHandler((req, res) => {
+  const input = batchDeleteSchema.parse(req.body);
+  res.json(batchDeleteBookmarks(input.ids));
+}));
+
+apiRouter.post('/bookmarks/refetch', asyncHandler((req, res) => {
+  const input = refetchBatchSchema.parse(req.body ?? {});
+  res.json(enqueueBatchRefetch(input.limit));
+}));
+apiRouter.post('/bookmarks/:id/refetch', asyncHandler(async (req, res) => {
+  res.json(await refetchBookmark(idParamSchema.parse(req.params).id));
+}));
+
+apiRouter.get('/trash', (_req, res) => {
+  res.json(listTrashedBookmarks());
+});
+apiRouter.post('/trash/:id/restore', asyncHandler((req, res) => {
+  res.json(restoreBookmark(idParamSchema.parse(req.params).id));
+}));
+apiRouter.delete('/trash/:id', asyncHandler((req, res) => {
+  permanentlyDeleteBookmark(idParamSchema.parse(req.params).id);
+  res.status(204).end();
+}));
+apiRouter.delete('/trash', (_req, res) => {
+  const result = emptyTrash();
+  res.json(result);
+});
 
 apiRouter.get('/collections', (_req, res) => res.json(listCollections()));
 apiRouter.post('/collections', asyncHandler((req, res) => {
@@ -63,10 +113,25 @@ apiRouter.delete('/collections/:id', asyncHandler((req, res) => {
   deleteCollection(idParamSchema.parse(req.params).id);
   res.status(204).end();
 }));
+apiRouter.post('/collections/reorder', asyncHandler((req, res) => {
+  const input = reorderSchema.parse(req.body);
+  reorderCollections(input.parentId, input.orderedIds);
+  res.json({ ok: true });
+}));
 
 apiRouter.get('/tags', (_req, res) => res.json(listTags()));
 apiRouter.post('/tags', asyncHandler((req, res) => {
   res.status(201).json(createTag(tagCreateSchema.parse(req.body)));
+}));
+apiRouter.patch('/tags/:id', asyncHandler((req, res) => {
+  res.json(updateTag(idParamSchema.parse(req.params).id, tagCreateSchema.partial().parse(req.body)));
+}));
+apiRouter.post('/tags/:id/merge/:targetId', asyncHandler((req, res) => {
+  const params = z.object({ id: z.coerce.number().int().positive(), targetId: z.coerce.number().int().positive() }).parse(req.params);
+  res.json(mergeTags(params.id, params.targetId));
+}));
+apiRouter.post('/tags/clean-orphans', asyncHandler((_req, res) => {
+  res.json(cleanOrphanTags());
 }));
 apiRouter.delete('/tags/:id', asyncHandler((req, res) => {
   deleteTag(idParamSchema.parse(req.params).id);
@@ -75,23 +140,11 @@ apiRouter.delete('/tags/:id', asyncHandler((req, res) => {
 
 apiRouter.post('/fetch-title', asyncHandler(async (req, res) => {
   if (process.env.DISABLE_FETCH_TITLE === '1') {
-    res.json({ title: null, faviconUrl: null });
+    res.json({ title: null, description: null, coverUrl: null, faviconUrl: null });
     return;
   }
   const input = fetchTitleSchema.parse(req.body);
   const url = normalizeUrl(input.url);
   if (!isSafePublicHttpUrl(url)) throw new AppError(400, 'INVALID_URL', '不允许抓取本机或内网地址');
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(5_000),
-      headers: { 'User-Agent': 'LinkNest/1.0 (local bookmark manager)', Accept: 'text/html,application/xhtml+xml' },
-      redirect: 'manual',
-    });
-    const html = (await response.text()).slice(0, 512_000);
-    const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-    const title = match ? decodeHtml(match[1].replace(/\s+/g, ' ').trim()).slice(0, 500) : null;
-    res.json({ title: title || null, faviconUrl: faviconFor(url) });
-  } catch {
-    res.json({ title: null, faviconUrl: faviconFor(url) });
-  }
+  res.json(await fetchMetadata(url));
 }));

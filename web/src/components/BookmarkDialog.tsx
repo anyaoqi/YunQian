@@ -3,9 +3,9 @@ import { api } from '../api';
 import type { Bookmark, BookmarkPayload, Collection } from '../types';
 
 type Props = { open: boolean; bookmark: Bookmark | null; collections: Collection[]; defaultCollectionId: number | null; onClose: () => void; onSaved: () => void };
-type FormState = { url: string; title: string; description: string; note: string; collectionId: string; tags: string; isFavorite: boolean };
+type FormState = { url: string; title: string; description: string; note: string; collectionId: string; tags: string; coverUrl: string; isFavorite: boolean };
 
-const emptyForm: FormState = { url: '', title: '', description: '', note: '', collectionId: '', tags: '', isFavorite: false };
+const emptyForm: FormState = { url: '', title: '', description: '', note: '', collectionId: '', tags: '', coverUrl: '', isFavorite: false };
 function flatten(collections: Collection[], prefix = ''): Array<{ id: number; label: string }> {
   return collections.flatMap((collection) => [{ id: collection.id, label: `${prefix}${collection.icon ?? '📁'} ${collection.name}` }, ...flatten(collection.children, `${prefix}　`)]);
 }
@@ -20,7 +20,7 @@ export function BookmarkDialog({ open, bookmark, collections, defaultCollectionI
       setError('');
       setForm(bookmark ? {
         url: bookmark.url, title: bookmark.title, description: bookmark.description ?? '', note: bookmark.note ?? '',
-        collectionId: bookmark.collectionId?.toString() ?? '', tags: bookmark.tags.join(', '), isFavorite: bookmark.isFavorite,
+        collectionId: bookmark.collectionId?.toString() ?? '', tags: bookmark.tags.join(', '), coverUrl: bookmark.coverUrl ?? '', isFavorite: bookmark.isFavorite,
       } : { ...emptyForm, collectionId: defaultCollectionId?.toString() ?? '' });
     }
   }, [open, bookmark, defaultCollectionId]);
@@ -32,6 +32,8 @@ export function BookmarkDialog({ open, bookmark, collections, defaultCollectionI
     try {
       const result = await api.fetchTitle(form.url);
       if (result.title && !form.title.trim()) set('title', result.title);
+      if (result.description && !form.description.trim()) set('description', result.description);
+      if (result.coverUrl && !form.coverUrl.trim()) set('coverUrl', result.coverUrl);
       if (!result.title) setError('未能抓取标题，请手动填写。');
     } catch (reason) { setError(reason instanceof Error ? reason.message : '标题抓取失败'); }
     finally { setFetching(false); }
@@ -41,7 +43,7 @@ export function BookmarkDialog({ open, bookmark, collections, defaultCollectionI
     setSaving(true); setError('');
     const payload: BookmarkPayload = {
       url: form.url, title: form.title, description: form.description || null, note: form.note || null,
-      collectionId: form.collectionId ? Number(form.collectionId) : null,
+      collectionId: form.collectionId ? Number(form.collectionId) : null, coverUrl: form.coverUrl || null,
       tags: form.tags.split(/[,，\n]/).map((tag) => tag.trim()).filter(Boolean), isFavorite: form.isFavorite,
     };
     try {
@@ -57,6 +59,7 @@ export function BookmarkDialog({ open, bookmark, collections, defaultCollectionI
       <label className="field"><span>标题</span><input value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="为空时将使用网址域名" /></label>
       <div className="two-fields"><label className="field"><span>归属分类</span><select value={form.collectionId} onChange={(event) => set('collectionId', event.target.value)}><option value="">未分类</option>{flatten(collections).map((collection) => <option key={collection.id} value={collection.id}>{collection.label}</option>)}</select></label><label className="field"><span>标签</span><input value={form.tags} onChange={(event) => set('tags', event.target.value)} placeholder="前端, 文档（逗号分隔）" /></label></div>
       <label className="field"><span>描述</span><input value={form.description} onChange={(event) => set('description', event.target.value)} placeholder="这个网址是什么？" /></label>
+      <label className="field"><span>封面图 URL</span><input value={form.coverUrl} onChange={(event) => set('coverUrl', event.target.value)} placeholder="自动抓取或手动填写" /></label>
       <label className="field"><span>个人备注</span><textarea value={form.note} onChange={(event) => set('note', event.target.value)} placeholder="记录为什么收藏它，或者要点…" rows={3} /></label>
       <label className="favorite-check"><input type="checkbox" checked={form.isFavorite} onChange={(event) => set('isFavorite', event.target.checked)} /> <span>★ 加入星标收藏</span></label>
       {error && <p className="form-error">{error}</p>}
