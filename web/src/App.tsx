@@ -4,6 +4,7 @@ import { BatchActionBar } from './components/BatchActionBar';
 import { BatchDialog } from './components/BatchDialog';
 import { BookmarkDialog } from './components/BookmarkDialog';
 import { BookmarkList } from './components/BookmarkList';
+import { CollectionDialog } from './components/CollectionDialog';
 import { GridView } from './components/GridView';
 import { HomePanel } from './components/HomePanel';
 import { ImportDialog } from './components/ImportDialog';
@@ -78,6 +79,7 @@ export default function App() {
   const [batchDialogMode, setBatchDialogMode] = useState<'move' | 'tags' | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'home'>(loadViewMode);
   const [tagManageOpen, setTagManageOpen] = useState(false);
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const refreshTaxonomy = useCallback(async () => {
@@ -146,12 +148,8 @@ export default function App() {
     try { await api.createCollection({ name: name.trim(), parentId }); refresh(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '创建分类失败'); }
   };
-  const renameCollection = async (collection: Collection) => {
-    const name = window.prompt('重命名分类', collection.name);
-    if (!name?.trim() || name.trim() === collection.name) return;
-    try { await api.updateCollection(collection.id, { name: name.trim() }); refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '重命名分类失败'); }
-  };
+  const renameCollection = (collection: Collection) => setEditingCollection(collection);
+  const savedCollection = () => { setEditingCollection(null); refresh(); };
   const removeCollection = async (collection: Collection) => {
     if (!window.confirm(`删除分类「${collection.name}」？其中的书签将变为未分类，子分类会被上移。`)) return;
     try {
@@ -272,6 +270,7 @@ export default function App() {
         </>}
     </main>
     <BookmarkDialog open={bookmarkDialog} bookmark={editingBookmark} collections={collections} defaultCollectionId={typeof filters.collectionId === 'number' ? filters.collectionId : null} onClose={() => setBookmarkDialog(false)} onSaved={savedBookmark} />
+    <CollectionDialog open={!!editingCollection} collection={editingCollection} collections={collections} onClose={() => setEditingCollection(null)} onSaved={savedCollection} />
     <TagManageDialog open={tagManageOpen} tags={tags} onClose={() => setTagManageOpen(false)} onChanged={refresh} />
     <ImportDialog open={importDialog} onClose={() => setImportDialog(false)} onImported={refresh} />
   </div>;

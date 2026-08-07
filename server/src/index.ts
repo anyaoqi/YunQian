@@ -13,7 +13,7 @@ const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? '127.0.0.1';
 
 app.disable('x-powered-by');
-app.use(cors({ origin: ['http://127.0.0.1:5173', 'http://localhost:5173'] }));
+app.use(cors({ origin: ['http://127.0.0.1:5178', 'http://localhost:5178'] }));
 app.use(express.json({ limit: '20mb' }));
 app.use('/api', apiRouter);
 

@@ -17,10 +17,10 @@ npm -v
 ```bash
 cd D:\Project\bookmark
 npm install          # 根目录安装，workspaces 会一并装 server 与 web
-npm run dev          # 同时启动后端(3001) 与前端(5173)
+npm run dev          # 同时启动后端(3001) 与前端(5178)
 ```
 
-打开 <http://localhost:5173>。数据库文件在首次启动时自动创建于 `server/data/linknest.db`。
+打开 <http://localhost:5178>。数据库文件在首次启动时自动创建于 `server/data/linknest.db`。
 
 ## 3. 脚本一览
 

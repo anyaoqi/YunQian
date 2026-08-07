@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { ThemeToggle } from './ThemeToggle';
 import type { Sort } from '../types';
 
 type Props = {
@@ -40,6 +41,7 @@ export function Toolbar({ query, sort, total, view, showHomeToggle, onQueryChang
         <a className="button secondary" href="/api/export?format=html" title="导出为浏览器可导入的 HTML">HTML</a>
       </div>
       <button className="button primary" onClick={onAdd}>+ 添加书签</button>
+      <ThemeToggle />
     </div>
   </header>;
 }

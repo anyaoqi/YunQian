@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useTheme } from '../hooks/useTheme';
 import type { Collection, Stats, Tag } from '../types';
 
 const COLLAPSED_KEY = 'linknest:collapsed-tree';
@@ -37,10 +36,12 @@ type Props = {
   onReorderCollection?: (parentId: number | null, orderedIds: number[]) => void;
 };
 
-function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCollection, onCreate, onRename, onDelete, onDropBookmark, onReorderCollection, siblings }: {
+type ContextMenuState = { x: number; y: number; collection: Collection };
+
+function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCollection, onCreate, onRename, onDelete, onDropBookmark, onReorderCollection, onContextMenu, siblings }: {
   collection: Collection; depth: number; activeId: Props['collectionId']; collapsed: Set<number>;
   onToggle: (id: number) => void;
-  onCollection: Props['onCollection']; onCreate: Props['onCreateCollection']; onRename: Props['onRenameCollection']; onDelete: Props['onDeleteCollection']; onDropBookmark?: Props['onDropBookmark']; onReorderCollection?: Props['onReorderCollection']; siblings: Collection[];
+  onCollection: Props['onCollection']; onCreate: Props['onCreateCollection']; onRename: Props['onRenameCollection']; onDelete: Props['onDeleteCollection']; onDropBookmark?: Props['onDropBookmark']; onReorderCollection?: Props['onReorderCollection']; onContextMenu: (state: ContextMenuState) => void; siblings: Collection[];
 }) {
   const hasChildren = collection.children.length > 0;
   const isCollapsed = collapsed.has(collection.id);
@@ -80,21 +81,22 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
           {isCollapsed ? '▸' : '▾'}
         </button>
         : <span className="collapse-toggle" />}
-      <button className="tree-main" draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', `collection:${collection.id}`); event.dataTransfer.effectAllowed = 'move'; setDragging(true); }} onDragEnd={() => setDragging(false)} onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} title="双击重命名，拖拽排序">
+      <button className="tree-main" draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', `collection:${collection.id}`); event.dataTransfer.effectAllowed = 'move'; setDragging(true); }} onDragEnd={() => setDragging(false)} onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} onContextMenu={(event) => { event.preventDefault(); onContextMenu({ x: event.clientX, y: event.clientY, collection }); }} title="双击编辑，拖拽排序，右键更多操作">
         <span>{collection.icon ?? '📁'}</span><span className="tree-name">{collection.name}</span><small>{collection.bookmarkCount}</small>
       </button>
       <span className="tree-actions">
-        <button onClick={() => onCreate(collection.id)} title="新建子分类">+</button>
-        <button onClick={() => onDelete(collection)} title="删除分类">×</button>
+        <button onClick={() => onCreate(collection.id)} title="新建子分类" aria-label="新建子分类"><span aria-hidden>＋</span></button>
+        <button onClick={() => onRename(collection)} title="编辑分类" aria-label="编辑分类"><span aria-hidden>✎</span></button>
+        <button className="danger" onClick={() => onDelete(collection)} title="删除分类" aria-label="删除分类"><span aria-hidden>×</span></button>
       </span>
     </div>
-    {!isCollapsed && collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} collapsed={collapsed} onToggle={onToggle} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} onDropBookmark={onDropBookmark} onReorderCollection={onReorderCollection} siblings={collection.children} />)}
+    {!isCollapsed && collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} collapsed={collapsed} onToggle={onToggle} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} onDropBookmark={onDropBookmark} onReorderCollection={onReorderCollection} onContextMenu={onContextMenu} siblings={collection.children} />)}
   </>;
 }
 
 export function Sidebar(props: Props) {
   const [collapsed, setCollapsed] = useState<Set<number>>(loadCollapsed);
-  const { theme, setTheme } = useTheme();
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   useEffect(() => {
     if (props.collections.length === 0) return;
@@ -111,18 +113,36 @@ export function Sidebar(props: Props) {
     try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { }
   }, [collapsed]);
 
+  // 右键菜单：点击页面其他位置或按 Esc 关闭
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    window.addEventListener('click', close);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contextMenu]);
+
   const toggleCollapsed = (id: number) => setCollapsed((old) => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+
+  const handleContextAction = (action: 'edit' | 'create' | 'delete') => {
+    if (!contextMenu) return;
+    const collection = contextMenu.collection;
+    setContextMenu(null);
+    if (action === 'edit') props.onRenameCollection(collection);
+    else if (action === 'create') props.onCreateCollection(collection.id);
+    else if (action === 'delete') props.onDeleteCollection(collection);
+  };
 
   return <aside className="sidebar">
     <div className="brand"><span className="brand-mark">⌘</span><span>LinkNest</span></div>
-    <div className="theme-toggle" title="切换主题">
-      <span>{theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🖥️'}</span>
-      <select value={theme} onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'system')}>
-        <option value="light">浅色</option>
-        <option value="dark">深色</option>
-        <option value="system">跟随系统</option>
-      </select>
-    </div>
     <nav className="primary-nav" aria-label="书签筛选">
       <button className={!props.collectionId && !props.favorite && !props.tag && !props.trash ? 'active' : ''} onClick={() => props.onCollection()}><span>◈</span>全部书签<small>{props.stats?.bookmarks ?? 0}</small></button>
       <button className={props.favorite === 'true' ? 'active' : ''} onClick={() => props.onFavorite(props.favorite === 'true' ? undefined : 'true')}><span>★</span>星标收藏<small>{props.stats?.favorites ?? 0}</small></button>
@@ -133,7 +153,7 @@ export function Sidebar(props: Props) {
     <section className="side-section collection-section">
       <div className="section-title"><span>分类</span><button onClick={() => props.onCreateCollection(null)} title="新建根分类">+</button></div>
       <div className="collection-tree">
-        {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} collapsed={collapsed} onToggle={toggleCollapsed} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} onDropBookmark={props.onDropBookmark} onReorderCollection={props.onReorderCollection} siblings={props.collections} />)}
+        {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} collapsed={collapsed} onToggle={toggleCollapsed} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} onDropBookmark={props.onDropBookmark} onReorderCollection={props.onReorderCollection} onContextMenu={setContextMenu} siblings={props.collections} />)}
       </div>
     </section>
 
@@ -147,5 +167,17 @@ export function Sidebar(props: Props) {
       </div>
     </section>
     <div className="sidebar-note">本地优先 · 数据保存在你的电脑</div>
+
+    {contextMenu && (() => {
+      const MENU_W = 180; const MENU_H = 150;
+      const x = Math.min(contextMenu.x, window.innerWidth - MENU_W - 8);
+      const y = Math.min(contextMenu.y, window.innerHeight - MENU_H - 8);
+      return <ul className="context-menu" role="menu" style={{ left: Math.max(8, x), top: Math.max(8, y) }} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+        <li><button role="menuitem" onClick={() => handleContextAction('edit')}><span aria-hidden>✎</span><span>编辑分类…</span></button></li>
+        <li><button role="menuitem" onClick={() => handleContextAction('create')}><span aria-hidden>＋</span><span>新建子分类…</span></button></li>
+        <li className="divider" aria-hidden="true" />
+        <li><button role="menuitem" className="danger" onClick={() => handleContextAction('delete')}><span aria-hidden>×</span><span>删除分类…</span></button></li>
+      </ul>;
+    })()}
   </aside>;
 }
