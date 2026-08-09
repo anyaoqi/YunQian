@@ -1,13 +1,13 @@
 [build]
-# 强制使用根目录的 Dockerfile 构建，不用 Nixpacks
 builder = "dockerfile"
 dockerfilePath = "./Dockerfile"
 
 [deploy]
-# 容器内应用监听端口：必须与 Network 面板填的端口一致（3000）
+# 容器内应用监听端口，必须与 Dockerfile EXPOSE 保持一致
+# Next.js standalone 通过 docker-entrypoint.sh 读取 Railway 注入的 PORT 环境变量
 port = 3000
 
-# 健康检查：放宽到 90 秒（Next.js 冷启动可能较慢）
+# 健康检查
 healthcheckPath = "/api/health"
 healthcheckTimeout = 90
 
