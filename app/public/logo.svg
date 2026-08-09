@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  <!-- 占位 SVG；当前主要使用 web/public/logo.png 作为位图图标 -->
+  <rect width="64" height="64" fill="#d97757" rx="14" />
+  <path fill="#fff8f0" d="M27 24 h10 v20 l-5-3.5 l-5 3.5 z" />
+</svg>

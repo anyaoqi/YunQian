@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.pnpm-store
+app/.next
+app/data
+app/node_modules
+*.db
+*.db-wal
+*.db-shm
+*.log
+.DS_Store
+docs

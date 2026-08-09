@@ -1,9 +1,9 @@
 packages:
-  - server
-  - web
+  - app
 
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: false
+  sharp: true
 
 onlyBuiltDependencies:
   - esbuild

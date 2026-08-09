@@ -1,6 +1,6 @@
 node_modules/
-dist/
-server/data/
+.next/
+app/data/
 *.db
 *.db-wal
 *.db-shm
@@ -8,4 +8,5 @@ server/data/
 .env.local
 *.log
 .DS_Store
-.vite/
+*.tsbuildinfo
+.pnpm-store/
