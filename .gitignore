@@ -8,3 +8,5 @@ app/data/
 .env.local
 *.log
 .DS_Store
+*.tsbuildinfo
+.pnpm-store/
