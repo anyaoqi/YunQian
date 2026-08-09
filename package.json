@@ -5,17 +5,14 @@
   "description": "云签 YunQian - 跨浏览器书签汇集与链接导航",
   "type": "module",
   "workspaces": [
-    "server",
-    "web"
+    "app"
   ],
   "scripts": {
-    "dev": "concurrently -n server,web -c cyan,magenta \"npm run dev:server\" \"npm run dev:web\"",
-    "dev:server": "npm --workspace @yunqian/server run dev",
-    "dev:web": "npm --workspace @yunqian/web run dev",
-    "build": "npm --workspace @yunqian/server run build && npm --workspace @yunqian/web run build",
-    "start": "npm --workspace @yunqian/server run start",
-    "typecheck": "npm --workspace @yunqian/server run typecheck && npm --workspace @yunqian/web run typecheck",
-    "clean": "node -e \"const {rmSync}=require('node:fs'); ['server/dist','web/dist'].forEach(p=>rmSync(p,{recursive:true,force:true}))\""
+    "dev": "pnpm --filter @yunqian/app run dev",
+    "build": "pnpm --filter @yunqian/app run build",
+    "start": "pnpm --filter @yunqian/app run start",
+    "typecheck": "pnpm --filter @yunqian/app run typecheck",
+    "clean": "node -e \"const {rmSync}=require('node:fs'); ['app/.next'].forEach(p=>rmSync(p,{recursive:true,force:true}))\""
   },
   "devDependencies": {
     "concurrently": "9.1.2"
