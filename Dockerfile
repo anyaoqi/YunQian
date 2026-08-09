@@ -25,7 +25,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
-ENV PORT=3000
+# PORT 不固定，Railway 会自动注入
 ENV DB_PATH=/data/yunqian.db
 
 # 复制 standalone 产物
@@ -34,10 +34,13 @@ COPY --from=builder /repo/app/.next/standalone/app/ ./
 COPY --from=builder /repo/app/.next/static/ ./.next/static/
 # 复制 public 资源（logo 等）
 COPY --from=builder /repo/app/public/ ./public/
+# 复制启动脚本
+COPY --from=builder /repo/app/docker-entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
-# 创建数据目录（SQLite 数据库存放位置）
-RUN mkdir -p /data
+# 创建数据目录
+RUN mkdir -p /data && chmod 777 /data
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]
