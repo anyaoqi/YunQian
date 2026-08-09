@@ -1,16 +1,13 @@
 [build]
-# 使用根目录的 Dockerfile 进行构建
+# 强制使用根目录的 Dockerfile 构建，不用 Nixpacks
 builder = "dockerfile"
 dockerfilePath = "./Dockerfile"
 
 [deploy]
-# 健康检查
+# 健康检查：放宽到 90 秒（Next.js 冷启动可能较慢）
 healthcheckPath = "/api/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 90
 
 # 重启策略
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
-
-# 启动命令（覆盖 Railway 的自动探测，避免误调 pnpm）
-startCommand = "node server.js"
+restartPolicyMaxRetries = 5
