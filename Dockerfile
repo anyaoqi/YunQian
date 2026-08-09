@@ -6,40 +6,38 @@ WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# 先复制 workspace 根文件，利用 Docker 缓存
-COPY pnpm-lock.yaml package.json pnpm-workspace.yaml ./
+# 先复制 workspace 根文件，利用 Docker 缓存（.npmrc 含国内镜像，加速构建）
+COPY .npmrc pnpm-lock.yaml package.json pnpm-workspace.yaml ./
 COPY app/package.json ./app/package.json
 
-# 安装依赖
 RUN pnpm install --frozen-lockfile
 
-# 复制源码
+# 复制源码并构建 standalone 产物
+# app 下的 build 脚本会在 next build 后，把 .next/static 与 public 同步到 standalone/app/ 内部
 COPY app/ ./app/
-
-# 构建 standalone 产物
 RUN pnpm --filter @yunqian/app run build
 
 # --- 运行阶段 ---
 FROM base AS runner
-WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DB_PATH=/data/yunqian.db
 
-# 复制 standalone 产物
-COPY --from=builder /repo/app/.next/standalone/app/ ./
-# 复制静态资源（CSS/JS）
-COPY --from=builder /repo/app/.next/static/ ./.next/static/
-# 复制 public 资源（logo 等）
-COPY --from=builder /repo/app/public/ ./public/
-# 复制启动脚本
-COPY --from=builder /repo/app/docker-entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+# Next.js standalone 在 pnpm workspace 下的投影结构：
+#   standalone/
+#     node_modules/next ...     （require('next') 从这里解析）
+#     app/server.js             （工作区 app 包的启动入口）
+#     app/.next/static/         （由 app/package.json 的 build 脚本提前 cp 进来）
+#     app/public/               （同上）
+# 因此把 standalone 整棵树投影到容器根，保持相对结构不变即可
+COPY --from=builder /repo/app/.next/standalone/ /
 
-# 创建数据目录
-RUN mkdir -p /data && chmod 777 /data
+WORKDIR /app
+
+COPY --from=builder /repo/app/docker-entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh && mkdir -p /data && chmod 777 /data
 
 EXPOSE 3000
 
