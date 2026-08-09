@@ -33,6 +33,12 @@ export function serializeError(error: unknown): { status: number; body: ErrorPay
       body: { error: { code: error.code, message: error.message, details: error.details } },
     };
   }
+  if (error instanceof SyntaxError) {
+    return {
+      status: 400,
+      body: { error: { code: 'INVALID_JSON', message: '请求体不是合法的 JSON', details: null } },
+    };
+  }
   console.error(error);
   return {
     status: 500,

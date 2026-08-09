@@ -165,7 +165,7 @@ button, input, textarea, select { font: inherit; } button { cursor: pointer; } b
 .button.secondary:hover { background: var(--button-secondary-hover); }
 .button.danger { background: var(--danger); color: white; border: 0; box-shadow: 0 3px 9px color-mix(in srgb, var(--danger) 25%, transparent); }
 .button.danger:hover { background: var(--danger-hover); }
-.content-header { display: flex; align-items: end; justify-content: space-between; padding: 40px 0 18px; }
+.content-header { display: flex; align-items: flex-end; justify-content: space-between; padding: 40px 0 18px; }
 .eyebrow { display: block; color: var(--text-muted); font-size: 11px; letter-spacing: .08em; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
 .content-header h1 { margin: 0; font-size: 28px; letter-spacing: -.8px; color: var(--text-heading); }
 .filter-reset { border: 0; color: #6661bd; background: #ecebff; padding: 7px 10px; border-radius: 7px; font-size: 11px; }
@@ -251,7 +251,7 @@ html[data-theme="dark"] .tag-chip:hover { background: #35325a; }
 
 .modal-backdrop { position: fixed; z-index: 10; inset: 0; padding: 24px; display: grid; place-items: center; background: var(--bg-overlay); backdrop-filter: blur(2px); }
 .modal { width: min(100%, 590px); max-height: calc(100vh - 48px); overflow-y: auto; background: var(--bg-modal); border-radius: 13px; box-shadow: 0 24px 80px #1111254d; padding: 24px; }
-.modal-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 19px; }
+.modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 19px; }
 .modal-header h2 { margin: 0; font-size: 21px; letter-spacing: -.5px; color: var(--text-heading); }
 .icon-close { border: 0; color: var(--text-muted); background: var(--bg-empty); border-radius: 7px; width: 27px; height: 27px; font-size: 18px; line-height: 20px; }
 .icon-close:hover { background: var(--bg-card-hover); }
