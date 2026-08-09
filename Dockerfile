@@ -30,6 +30,8 @@ ENV DB_PATH=/data/yunqian.db
 
 # 复制 standalone 产物
 COPY --from=builder /repo/app/.next/standalone/app/ ./
+# 复制 standalone trace 出的运行时依赖（包含 next 等，位于 standalone 根而非 app 子目录下）
+COPY --from=builder /repo/app/.next/standalone/node_modules/ ./node_modules/
 # 复制静态资源（CSS/JS）
 COPY --from=builder /repo/app/.next/static/ ./.next/static/
 # 复制 public 资源（logo 等）
