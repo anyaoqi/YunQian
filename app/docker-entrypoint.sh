@@ -5,12 +5,11 @@ set -e
 mkdir -p /data
 touch /data/.writable-test 2>/dev/null && rm -f /data/.writable-test
 
-# Railway 会自动注入 PORT 环境变量
-# Next.js standalone 优先读取命令行参数，其次读取环境变量
-# 这里双保险：同时通过命令行参数传递，并在环境变量里也设好
-NODE_PORT="${PORT:-3000}"
-export PORT="${NODE_PORT}"
+# Railway 会自动注入 PORT 环境变量（删除 railway.toml 硬编码 port 后，
+# Railway 会自动分配代理端口并注入相同值的 PORT，保证代理与监听一致）
+# Next standalone 通过 process.env.PORT / HOSTNAME 读取
+export PORT="${PORT:-3000}"
 export HOSTNAME="0.0.0.0"
 
-# 启动 Next.js standalone 服务
-exec node server.js -p "${NODE_PORT}" -H 0.0.0.0
+# 启动 Next.js standalone
+exec node server.js

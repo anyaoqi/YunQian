@@ -3,14 +3,10 @@ builder = "dockerfile"
 dockerfilePath = "./Dockerfile"
 
 [deploy]
-# 容器内应用监听端口，必须与 Dockerfile EXPOSE 保持一致
-# Next.js standalone 通过 docker-entrypoint.sh 读取 Railway 注入的 PORT 环境变量
-port = 3000
-
-# 健康检查
+# 不硬编码 port，让 Railway 自动分配代理端口并注入 PORT 环境变量
+# Next standalone 通过 process.env.PORT 读取，确保代理端口与监听端口一致
 healthcheckPath = "/api/health"
 healthcheckTimeout = 90
 
-# 重启策略
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
