@@ -1,6 +1,6 @@
 import { collectionUpdateSchema } from '@/lib/server/lib/validators';
 import { deleteCollection, updateCollection } from '@/lib/server/services/taxonomy';
-import { handleRouteError } from '@/lib/server/lib/errors';
+import { AppError, handleRouteError } from '@/lib/server/lib/errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 async function parseId(params: Promise<{ id: string }>): Promise<number> {
   const { id } = await params;
   const parsed = Number(id);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error('Invalid id');
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new AppError(400, 'INVALID_ID', 'id 参数不合法');
   return parsed;
 }
 

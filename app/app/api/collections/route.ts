@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { collectionCreateSchema } from '@/lib/server/lib/validators';
 import { createCollection, listCollections } from '@/lib/server/services/taxonomy';
 import { handleRouteError } from '@/lib/server/lib/errors';

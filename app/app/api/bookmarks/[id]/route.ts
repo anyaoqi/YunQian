@@ -1,12 +1,14 @@
 import { bookmarkUpdateSchema } from '@/lib/server/lib/validators';
 import { deleteBookmark, getBookmark, updateBookmark } from '@/lib/server/services/bookmarks';
-import { handleRouteError } from '@/lib/server/lib/errors';
+import { AppError, handleRouteError } from '@/lib/server/lib/errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 async function parseId(params: Promise<{ id: string }>): Promise<number> {
-  return Number((await params).id);
+  const parsed = Number((await params).id);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new AppError(400, 'INVALID_ID', 'id 参数不合法');
+  return parsed;
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
