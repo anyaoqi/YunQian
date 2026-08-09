@@ -25,7 +25,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
-# PORT 不固定，Railway 会自动注入
+ENV PORT=3000
 ENV DB_PATH=/data/yunqian.db
 
 # 复制 standalone 产物

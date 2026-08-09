@@ -4,6 +4,9 @@ builder = "dockerfile"
 dockerfilePath = "./Dockerfile"
 
 [deploy]
+# 容器内应用监听端口：必须与 Network 面板填的端口一致（3000）
+port = 3000
+
 # 健康检查：放宽到 90 秒（Next.js 冷启动可能较慢）
 healthcheckPath = "/api/health"
 healthcheckTimeout = 90
