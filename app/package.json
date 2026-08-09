@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build && cp -R .next/static .next/standalone/app/.next/ && cp -R public .next/standalone/app/",
-    "start": "HOSTNAME=127.0.0.1 node .next/standalone/app/server.js",
+    "start": "HOSTNAME=0.0.0.0 node .next/standalone/app/server.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
