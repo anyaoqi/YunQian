@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const THEME_KEY = 'linknest:theme';
+const THEME_KEY = 'yunqian:theme';
 type Theme = 'light' | 'dark';
 
 function getInitialTheme(): Theme {

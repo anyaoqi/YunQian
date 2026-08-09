@@ -15,12 +15,12 @@ npm -v
 ## 2. 首次启动
 
 ```bash
-cd D:\Project\bookmark
+cd D:\Project\Bookmark-Pool
 npm install          # 根目录安装，workspaces 会一并装 server 与 web
 npm run dev          # 同时启动后端(3001) 与前端(5178)
 ```
 
-打开 <http://localhost:5178>。数据库文件在首次启动时自动创建于 `server/data/linknest.db`。
+打开 <http://localhost:5178>。数据库文件在首次启动时自动创建于 `server/data/yunqian.db`。
 
 ## 3. 脚本一览
 
@@ -39,7 +39,7 @@ npm run dev          # 同时启动后端(3001) 与前端(5178)
 | --- | --- | --- |
 | `PORT` | `3001` | 后端端口 |
 | `HOST` | `127.0.0.1` | 监听地址。**改成 `0.0.0.0` 等于把无认证的数据库暴露给同网段** |
-| `DB_PATH` | `server/data/linknest.db` | 数据库文件路径 |
+| `DB_PATH` | `server/data/yunqian.db` | 数据库文件路径 |
 | `WEB_DIST` | `web/dist` | 生产模式静态资源目录 |
 | `DISABLE_FETCH_TITLE` | 未设置 | 设为 `1` 关闭服务端抓取标题（消除 SSRF 面） |
 
@@ -51,9 +51,9 @@ $env:PORT=4000; npm run dev:server
 ## 5. 目录与数据
 
 ```
-server/data/linknest.db        # 主数据库
-server/data/linknest.db-wal    # WAL 日志（正常现象）
-server/data/linknest.db-shm    # 共享内存索引
+server/data/yunqian.db        # 主数据库
+server/data/yunqian.db-wal    # WAL 日志（正常现象）
+server/data/yunqian.db-shm    # 共享内存索引
 ```
 
 三个文件都已在 `.gitignore` 中排除。
@@ -62,12 +62,12 @@ server/data/linknest.db-shm    # 共享内存索引
 
 **逻辑备份（推荐，跨版本安全）**
 ```bash
-curl -o linknest-backup.json http://127.0.0.1:3001/api/export
+curl -o yunqian-backup.json http://127.0.0.1:3001/api/export
 ```
 
 **物理备份（热备，无需停机）**
 ```bash
-sqlite3 server/data/linknest.db "VACUUM INTO 'D:/backup/linknest-20260726.db'"
+sqlite3 server/data/yunqian.db "VACUUM INTO 'D:/backup/yunqian-20260726.db'"
 ```
 没装 sqlite3 CLI 时，停掉服务后直接复制 `.db`、`.db-wal`、`.db-shm` 三个文件。
 
@@ -86,7 +86,7 @@ npm start            # 访问 http://127.0.0.1:3001
 用 PM2 常驻：
 ```bash
 npm i -g pm2
-pm2 start server/dist/index.js --name linknest --cwd D:\Project\bookmark
+pm2 start server/dist/index.js --name yunqian --cwd D:\Project\Bookmark-Pool
 pm2 save
 ```
 

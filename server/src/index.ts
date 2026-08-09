@@ -26,7 +26,7 @@ if (existsSync(webDist)) {
 app.use(errorHandler);
 
 app.listen(port, host, () => {
-  console.log(`LinkNest API listening at http://${host}:${port}`);
+  console.log(`云签 YunQian API listening at http://${host}:${port}`);
 });
 
 // 每 24 小时清理超过 30 天的回收站条目

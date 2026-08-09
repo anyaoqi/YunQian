@@ -132,7 +132,7 @@ export function buildHtmlExport(): string {
     return out;
   };
 
-  let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>LinkNest 导出</TITLE>\n<H1>LinkNest 书签</H1>\n<DL><p>\n';
+  let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>云签导出</TITLE>\n<H1>云签书签</H1>\n<DL><p>\n';
   for (const root of childrenOf(null)) html += renderFolder(root, 1);
   for (const bookmark of bookmarksOf(null)) {
     const tags = bookmark.tags.length > 0 ? ` TAGS="${escapeHtml(bookmark.tags.join(','))}"` : '';

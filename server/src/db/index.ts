@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { schemaSql } from './schema.js';
 
-const defaultPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../data/linknest.db');
+const defaultPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../data/yunqian.db');
 const dbPath = resolve(process.env.DB_PATH ?? defaultPath);
 mkdirSync(dirname(dbPath), { recursive: true });
 

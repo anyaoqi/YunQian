@@ -1,6 +1,6 @@
-# LinkNest（链巢）
+# 云签（YunQian）
 
-> 本地优先的**网址导航 + 知识库**。将浏览器书签转化为可组织、可检索、可注释的个人链接资产。
+> 跨浏览器的**云书签 + 链接导航**。将不同浏览器的书签汇集到一处，可组织、可检索、可分享。
 
 ![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522.5-339933?logo=node.js&logoColor=white) ![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite&logoColor=white) ![React](https://img.shields.io/badge/UI-React%2019-149ECA?logo=react&logoColor=white)
 
@@ -19,7 +19,7 @@
 
 ```powershell
 # 1. 进入项目目录
-cd D:\Project\bookmark
+cd D:\Project\Bookmark-Pool
 
 # 2. 安装依赖（首次执行）
 npm install
@@ -32,13 +32,13 @@ npm run dev
 
 - 前端开发服务器：`http://127.0.0.1:5178`
 - API：`http://127.0.0.1:3001/api`
-- 数据库：`server/data/linknest.db`（首次启动自动创建）
+- 数据库：`server/data/yunqian.db`（首次启动自动创建）
 
 ### 第一次使用
 
 1. 在 Chrome 打开 `chrome://bookmarks`（Edge：`edge://favorites`），点击菜单中的「导出书签」。
-2. 在 LinkNest 顶栏点击「导入」，选择导出的 `bookmarks.html`。
-3. 集合保留为左侧文件夹树；浏览器中的标签会变成 LinkNest 标签。
+2. 在云签顶栏点击「导入」，选择导出的 `bookmarks.html`。
+3. 集合保留为左侧文件夹树；浏览器中的标签会变成云签标签。
 4. 点击「+ 添加书签」添加新网址。标签输入可用中文逗号、英文逗号或换行分隔。
 5. 使用「导出」定期下载 JSON 备份。
 
@@ -65,7 +65,7 @@ npm start
 ## 数据与安全
 
 - 默认只监听 `127.0.0.1`，且 V1 **没有登录鉴权**；请勿将它直接暴露到公网。
-- 数据库使用 WAL 模式，默认文件为 `server/data/linknest.db`，已被 Git 忽略。
+- 数据库使用 WAL 模式，默认文件为 `server/data/yunqian.db`，已被 Git 忽略。
 - 推荐定期点击「导出」保存 JSON；详见[开发、部署与备份指南](./docs/07-dev-deploy.md)。
 - 标题抓取端点会拦截 `localhost`、私有 IP 与 `.local` 域名。若不需要该功能，可设置 `DISABLE_FETCH_TITLE=1`。
 
@@ -94,4 +94,4 @@ npm start
 
 ## V1 边界与下一步
 
-V1 专注于「今天可用」：本地单用户、书签导入与基础管理。回收站、批量整理、卡片导航面板、浏览器扩展、多用户分享、全文/语义检索和 AI 自动打标已完成设计，按 [V2–V4 路线图](./docs/05-roadmap.md)演进。
+V1 专注于「今天可用」：本地单用户、书签导入与基础管理。回收站、批量整理、卡片导航面板、浏览器扩展、多用户分享、全文/语义检索和 AI 自动打标已完成设计，按 [版本路线图](./docs/05-roadmap.md)演进。

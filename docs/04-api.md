@@ -176,7 +176,7 @@ type Tag = { id: number; name: string; color: string | null; count: number };
 ```
 
 ### GET /export
-`200` + `Content-Disposition: attachment; filename="linknest-export-<date>.json"`
+`200` + `Content-Disposition: attachment; filename="yunqian-export-<date>.json"`
 ```json
 {
   "version": 1,

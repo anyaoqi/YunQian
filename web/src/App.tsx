@@ -15,11 +15,11 @@ import { TrashList } from './components/TrashList';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import type { Bookmark, BookmarkFilters, Collection, Sort, Stats, Tag } from './types';
 
-const VIEW_KEY = 'linknest:view';
+const VIEW_KEY = 'yunqian:view';
 const VALID_SORTS = ['newest', 'oldest', 'title', 'popular'] as const;
 const defaultFilters: BookmarkFilters = { sort: 'newest', page: 1, pageSize: 24, direct: 'true' };
 
-const LIST_VIEW_KEY = 'linknest:view-mode';
+const LIST_VIEW_KEY = 'yunqian:view-mode';
 function loadViewMode(): 'list' | 'grid' | 'home' {
   try {
     const raw = localStorage.getItem(LIST_VIEW_KEY);

@@ -38,11 +38,11 @@ apiRouter.get('/export', (req, res) => {
   const date = new Date().toISOString().slice(0, 10);
   if (req.query.format === 'html') {
     res.setHeader('Content-Type', 'text/html; charset=UTF-8');
-    res.setHeader('Content-Disposition', `attachment; filename="linknest-export-${date}.html"`);
+    res.setHeader('Content-Disposition', `attachment; filename="yunqian-export-${date}.html"`);
     res.send(buildHtmlExport());
     return;
   }
-  res.setHeader('Content-Disposition', `attachment; filename="linknest-export-${date}.json"`);
+  res.setHeader('Content-Disposition', `attachment; filename="yunqian-export-${date}.json"`);
   res.json(buildExport());
 });
 

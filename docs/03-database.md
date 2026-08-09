@@ -1,6 +1,6 @@
 # 03 数据库设计
 
-数据库：**SQLite**（文件 `server/data/linknest.db`，`journal_mode=WAL`，`foreign_keys=ON`）。
+数据库：**SQLite**（文件 `server/data/yunqian.db`，`journal_mode=WAL`，`foreign_keys=ON`）。
 
 ## 1. ER 关系
 
@@ -165,5 +165,5 @@ CREATE TABLE embeddings (
 ## 6. 迁移与备份
 
 - **迁移**：启动时读取内置迁移列表，与 `schema_migrations` 对比，按序执行未应用项，单事务保证原子性。DDL 一律写成幂等形式（`CREATE TABLE IF NOT EXISTS` / `ALTER TABLE` 前置列检查）。
-- **备份**：直接复制 `linknest.db`（停机）或 `VACUUM INTO 'backup.db'`（热备）；逻辑备份用 `GET /api/export` 的 JSON。
+- **备份**：直接复制 `yunqian.db`（停机）或 `VACUUM INTO 'backup.db'`（热备）；逻辑备份用 `GET /api/export` 的 JSON。
 - **恢复**：替换 db 文件，或用导出的 JSON 走导入接口重建。

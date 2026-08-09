@@ -39,7 +39,7 @@ export async function fetchMetadata(rawUrl: string): Promise<MetadataResult> {
   try {
     const response = await fetch(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { 'User-Agent': 'LinkNest/1.0 (local bookmark manager)', Accept: 'text/html,application/xhtml+xml' },
+      headers: { 'User-Agent': 'YunQian/1.0 (local bookmark manager)', Accept: 'text/html,application/xhtml+xml' },
       redirect: 'manual',
     });
     const html = (await response.text()).slice(0, MAX_HTML);

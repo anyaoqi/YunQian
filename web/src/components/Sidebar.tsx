@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Collection, Stats, Tag } from '../types';
+import { Logo } from './Logo';
 
-const COLLAPSED_KEY = 'linknest:collapsed-tree';
+const COLLAPSED_KEY = 'yunqian:collapsed-tree';
 
 function loadCollapsed(): Set<number> {
   try {
@@ -142,7 +143,7 @@ export function Sidebar(props: Props) {
   };
 
   return <aside className="sidebar">
-    <div className="brand"><span className="brand-mark">⌘</span><span>LinkNest</span></div>
+    <div className="brand"><Logo size={28} className="brand-mark" /><span>云签</span></div>
     <nav className="primary-nav" aria-label="书签筛选">
       <button className={!props.collectionId && !props.favorite && !props.tag && !props.trash ? 'active' : ''} onClick={() => props.onCollection()}><span>◈</span>全部书签<small>{props.stats?.bookmarks ?? 0}</small></button>
       <button className={props.favorite === 'true' ? 'active' : ''} onClick={() => props.onFavorite(props.favorite === 'true' ? undefined : 'true')}><span>★</span>星标收藏<small>{props.stats?.favorites ?? 0}</small></button>
