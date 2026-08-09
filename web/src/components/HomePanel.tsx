@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Favicon, hostOf as domainOf } from './Favicon';
+import { Logo } from './Logo';
 import type { Bookmark } from '../types';
 
 type Props = {
@@ -30,7 +31,7 @@ export function HomePanel({ onVisit, onShowAll }: Props) {
 
   if (loading) return <div className="content-state"><span className="loader" />正在加载…</div>;
   if (popular.length === 0 && recent.length === 0) return <div className="content-state empty-state">
-    <div className="empty-icon">⌘</div><h2>还没有收藏</h2><p>添加一个常用网址，或者导入浏览器已有的收藏。</p><button className="button primary" onClick={onShowAll}>+ 添加第一条书签</button>
+    <div className="empty-icon"><Logo size={36} /></div><h2>还没有收藏</h2><p>添加一个常用网址，或者导入浏览器已有的收藏。</p><button className="button primary" onClick={onShowAll}>+ 添加第一条书签</button>
   </div>;
 
   return <div className="home-panel">

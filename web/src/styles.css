@@ -110,7 +110,7 @@ button, input, textarea, select { font: inherit; } button { cursor: pointer; } b
 
 .sidebar { background: var(--sidebar-bg); color: var(--sidebar-text); padding: 26px 12px 18px; display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .brand { color: white; display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 700; padding: 0 10px 27px; letter-spacing: -.5px; }
-.brand-mark { display: grid; place-items: center; border-radius: 9px; width: 28px; height: 28px; background: linear-gradient(135deg,#8d7aff,#4d60dd); color: white; box-shadow: 0 5px 13px #15163288; }
+.brand-mark { display: block; width: 28px; height: 28px; border-radius: 6px; }
 .theme-switch { width: 50px; height: 26px; border-radius: 999px; border: 1px solid var(--border-input); background: var(--bg-input); padding: 2px; position: relative; display: inline-flex; align-items: center; cursor: pointer; transition: background .15s ease; }
 .theme-switch:focus-visible { outline: 2px solid var(--border-input-focus); outline-offset: 2px; }
 .theme-switch-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--bg-card); box-shadow: 0 1px 3px var(--shadow-card); display: grid; place-items: center; font-size: 12px; transition: transform .2s ease; }
@@ -243,7 +243,7 @@ html[data-theme="dark"] .tag-chip:hover { background: #35325a; }
 .empty-state { border: 1px dashed var(--border-input); border-radius: 12px; background: var(--bg-empty); }
 .empty-state h2 { color: var(--text-heading); margin: 2px 0; font-size: 18px; }
 .empty-state p { margin: 0 0 6px; }
-.empty-icon { display: grid; place-items: center; border-radius: 15px; color: white; background: linear-gradient(135deg,var(--accent),#4d60dd); width: 47px; height: 47px; font-size: 24px; }
+.empty-icon { display: grid; place-items: center; border-radius: 14px; width: 56px; height: 56px; }
 .loader { width: 20px; height: 20px; border: 2px solid var(--border-input); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 13px; padding: 24px; color: var(--text-muted); font-size: 12px; }

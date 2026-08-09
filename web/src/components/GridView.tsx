@@ -1,5 +1,6 @@
 import type { Bookmark, Collection } from '../types';
 import { Favicon, hostOf as domainOf } from './Favicon';
+import { Logo } from './Logo';
 
 type Props = {
   bookmarks: Bookmark[];
@@ -36,7 +37,7 @@ export function GridView(props: Props) {
   const { bookmarks, categories, browsing, favoriteMode, loading, selectedIds, onEdit, onDelete, onFavorite, onRefetch, onVisit, onTag, onAdd, onOpenCategory, onToggleSelect } = props;
   if (loading) return <div className="content-state"><span className="loader" />正在加载…</div>;
   if (bookmarks.length === 0 && categories.length === 0) return <div className="content-state empty-state">
-    <div className="empty-icon">⌘</div><h2>这里还没有内容</h2><p>添加一个常用网址，或者导入浏览器已有的收藏。</p><button className="button primary" onClick={onAdd}>+ 添加第一条书签</button>
+    <div className="empty-icon"><Logo size={36} /></div><h2>这里还没有内容</h2><p>添加一个常用网址，或者导入浏览器已有的收藏。</p><button className="button primary" onClick={onAdd}>+ 添加第一条书签</button>
   </div>;
   return <div className="content-stack">
     {categories.length > 0 && (
