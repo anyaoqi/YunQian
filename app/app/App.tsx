@@ -22,20 +22,14 @@ const VALID_SORTS = ['newest', 'oldest', 'title', 'popular'] as const;
 const defaultFilters: BookmarkFilters = { sort: 'newest', page: 1, pageSize: 24, direct: 'true' };
 
 const LIST_VIEW_KEY = 'yunqian:view-mode';
-function loadViewMode(): 'list' | 'grid' | 'home' {
-  if (typeof window === 'undefined') return 'home';
-  try {
-    const raw = localStorage.getItem(LIST_VIEW_KEY);
-    if (raw === 'grid' || raw === 'home') return raw;
-  } catch { /* ignore */ }
+function parseViewMode(raw: string | null): 'list' | 'grid' | 'home' {
+  if (raw === 'grid' || raw === 'home' || raw === 'list') return raw;
   return 'home';
 }
 
-function loadView(): BookmarkFilters {
-  if (typeof window === 'undefined') return defaultFilters;
+function parseView(raw: string | null): BookmarkFilters {
+  if (!raw) return defaultFilters;
   try {
-    const raw = localStorage.getItem(VIEW_KEY);
-    if (!raw) return defaultFilters;
     const saved: unknown = JSON.parse(raw);
     if (!saved || typeof saved !== 'object') return defaultFilters;
     const data = saved as Record<string, unknown>;
@@ -70,7 +64,7 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [items, setItems] = useState<Bookmark[]>([]);
   const [total, setTotal] = useState(0);
-  const [filters, setFilters] = useState<BookmarkFilters>(loadView);
+  const [filters, setFilters] = useState<BookmarkFilters>(defaultFilters);
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -81,7 +75,7 @@ export default function App() {
   const [trashMode, setTrashMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [batchDialogMode, setBatchDialogMode] = useState<'move' | 'tags' | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'home'>(loadViewMode);
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'home'>('home');
   const [tagManageOpen, setTagManageOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -94,6 +88,13 @@ export default function App() {
   }, []);
 
   useEffect(() => { void refreshTaxonomy(); }, [refreshTaxonomy, refreshKey]);
+  // 挂载后从 localStorage 恢复持久化状态，避免 SSR/客户端初始值不一致导致 hydration 不匹配
+  useEffect(() => {
+    try {
+      setViewMode(parseViewMode(localStorage.getItem(LIST_VIEW_KEY)));
+      setFilters(parseView(localStorage.getItem(VIEW_KEY)));
+    } catch { /* ignore */ }
+  }, []);
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, JSON.stringify({
     collectionId: filters.collectionId,
     tag: filters.tag,
