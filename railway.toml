@@ -1,3 +1,8 @@
+[build]
+# 使用根目录的 Dockerfile 进行构建
+builder = "dockerfile"
+dockerfilePath = "./Dockerfile"
+
 [deploy]
 # 健康检查
 healthcheckPath = "/api/health"
@@ -6,3 +11,6 @@ healthcheckTimeout = 30
 # 重启策略
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
+# 启动命令（覆盖 Railway 的自动探测，避免误调 pnpm）
+startCommand = "node server.js"
