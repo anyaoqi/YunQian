@@ -13,7 +13,7 @@ function isTypingTarget(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement;
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true;
   if (target.isContentEditable) return true;
-  if (document.querySelector('.modal-backdrop')) return true;
+  if (document.querySelector('.modal-backdrop, .cmdk-backdrop')) return true;
   return false;
 }
 

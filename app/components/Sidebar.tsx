@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  Compass, Star, CircleDashed, Trash2, Folder, Plus, Pencil, X, ChevronRight,
+  Settings2, Database, PanelLeftClose, PanelLeftOpen,
+} from 'lucide-react';
 import type { Collection, Stats, Tag } from '@/lib/types';
 import { Logo } from './Logo';
 
@@ -27,6 +31,8 @@ type Props = {
   tag?: string;
   favorite?: 'true' | 'false';
   trash?: boolean;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   onCollection: (id?: number | 'none') => void;
   onTag: (name?: string) => void;
   onFavorite: (value?: 'true') => void;
@@ -42,6 +48,11 @@ type Props = {
 
 type ContextMenuState = { x: number; y: number; collection: Collection };
 
+function CollectionIcon({ collection }: { collection: Collection }) {
+  if (collection.icon) return <span className="tree-icon" aria-hidden>{collection.icon}</span>;
+  return <span className="tree-icon"><Folder aria-hidden /></span>;
+}
+
 function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCollection, onCreate, onRename, onDelete, onDropBookmark, onReorderCollection, onContextMenu, siblings }: {
   collection: Collection; depth: number; activeId: Props['collectionId']; collapsed: Set<number>;
   onToggle: (id: number) => void;
@@ -51,7 +62,7 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
   const isCollapsed = collapsed.has(collection.id);
   const [dragOver, setDragOver] = useState(false);
   const [dragging, setDragging] = useState(false);
-  // 把拖动的分类插入到当前分类之前，得到同层新顺序
+  // 把拖动的分类插入到当前分类之前,得到同层新顺序
   const computeReorder = (draggedId: number): number[] | null => {
     if (draggedId === collection.id) return null;
     const ordered = siblings.map((s) => s.id).filter((id) => id !== draggedId);
@@ -63,7 +74,7 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
   return <>
     <div
       className={`tree-item drop-target ${activeId === collection.id ? 'active' : ''} ${dragOver ? 'drag-over' : ''} ${dragging ? 'dragging' : ''}`}
-      style={{ paddingLeft: 12 + depth * 15 }}
+      style={{ paddingLeft: 10 + depth * 15 }}
       onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(event) => {
@@ -81,17 +92,19 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
       }}
     >
       {hasChildren
-        ? <button className="collapse-toggle" onClick={(event) => { event.stopPropagation(); onToggle(collection.id); }} title={isCollapsed ? '展开' : '收起'} aria-label={isCollapsed ? '展开' : '收起'} aria-expanded={!isCollapsed}>
-          {isCollapsed ? '▸' : '▾'}
-        </button>
-        : <span className="collapse-toggle" />}
-      <button className="tree-main" draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', `collection:${collection.id}`); event.dataTransfer.effectAllowed = 'move'; setDragging(true); }} onDragEnd={() => setDragging(false)} onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} onContextMenu={(event) => { event.preventDefault(); onContextMenu({ x: event.clientX, y: event.clientY, collection }); }} title="双击编辑，拖拽排序，右键更多操作">
-        <span>{collection.icon ?? '📁'}</span><span className="tree-name">{collection.name}</span><small>{collection.bookmarkCount}</small>
+        ? <button className={`collapse-toggle ${isCollapsed ? '' : 'open'}`} onClick={(event) => { event.stopPropagation(); onToggle(collection.id); }} title={isCollapsed ? '展开' : '收起'} aria-label={isCollapsed ? '展开' : '收起'} aria-expanded={!isCollapsed}>
+            <ChevronRight />
+          </button>
+        : <span className="collapse-toggle" aria-hidden />}
+      <button className="tree-main" draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', `collection:${collection.id}`); event.dataTransfer.effectAllowed = 'move'; setDragging(true); }} onDragEnd={() => setDragging(false)} onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} onContextMenu={(event) => { event.preventDefault(); onContextMenu({ x: event.clientX, y: event.clientY, collection }); }} title="点击进入,双击编辑,拖拽排序">
+        <CollectionIcon collection={collection} />
+        <span className="tree-name">{collection.name}</span>
+        <small>{collection.bookmarkCount}</small>
       </button>
       <span className="tree-actions">
-        <button onClick={() => onCreate(collection.id)} title="新建子分类" aria-label="新建子分类"><span aria-hidden>＋</span></button>
-        <button onClick={() => onRename(collection)} title="编辑分类" aria-label="编辑分类"><span aria-hidden>✎</span></button>
-        <button className="danger" onClick={() => onDelete(collection)} title="删除分类" aria-label="删除分类"><span aria-hidden>×</span></button>
+        <button className="icon-btn" onClick={() => onCreate(collection.id)} title="新建子分类" aria-label="新建子分类"><Plus /></button>
+        <button className="icon-btn" onClick={() => onRename(collection)} title="编辑分类" aria-label="编辑分类"><Pencil /></button>
+        <button className="icon-btn danger" onClick={() => onDelete(collection)} title="删除分类" aria-label="删除分类"><X /></button>
       </span>
     </div>
     {!isCollapsed && collection.children.map((child) => <CollectionItem key={child.id} collection={child} depth={depth + 1} activeId={activeId} collapsed={collapsed} onToggle={onToggle} onCollection={onCollection} onCreate={onCreate} onRename={onRename} onDelete={onDelete} onDropBookmark={onDropBookmark} onReorderCollection={onReorderCollection} onContextMenu={onContextMenu} siblings={collection.children} />)}
@@ -117,7 +130,7 @@ export function Sidebar(props: Props) {
     try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { }
   }, [collapsed]);
 
-  // 右键菜单：点击页面其他位置或按 Esc 关闭
+  // 右键菜单:点击页面其他位置或按 Esc 关闭
   useEffect(() => {
     if (!contextMenu) return;
     const close = () => setContextMenu(null);
@@ -145,42 +158,57 @@ export function Sidebar(props: Props) {
     else if (action === 'delete') props.onDeleteCollection(collection);
   };
 
-  return <aside className="sidebar">
-    <div className="brand"><Logo size={28} className="brand-mark" /><span>云签</span></div>
+  return <aside className="sidebar" aria-label="导航侧栏">
+    <div className="brand">
+      <Logo size={26} className="brand-mark" />
+      <span className="brand-name">云签</span>
+      <span className="brand-tag">YUNQIAN</span>
+      <button type="button" className="icon-btn" onClick={props.onToggleCollapse} title={props.collapsed ? '展开侧栏' : '收起侧栏'} aria-label={props.collapsed ? '展开侧栏' : '收起侧栏'}>
+        {props.collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+      </button>
+    </div>
     <nav className="primary-nav" aria-label="书签筛选">
-      <button className={!props.collectionId && !props.favorite && !props.tag && !props.trash ? 'active' : ''} onClick={() => props.onCollection()}><span>◈</span>全部书签<small>{props.stats?.bookmarks ?? 0}</small></button>
-      <button className={props.favorite === 'true' ? 'active' : ''} onClick={() => props.onFavorite(props.favorite === 'true' ? undefined : 'true')}><span>★</span>星标收藏<small>{props.stats?.favorites ?? 0}</small></button>
-      <button className={props.collectionId === 'none' ? 'active' : ''} onClick={() => props.onCollection('none')}><span>◌</span>未分类<small>{props.stats?.uncategorized ?? 0}</small></button>
-      <button className={props.trash ? 'active' : ''} onClick={() => props.onTrash()}><span>🗑</span>回收站<small>{props.stats?.trashed ?? 0}</small></button>
+      <button className={!props.collectionId && !props.favorite && !props.tag && !props.trash ? 'active' : ''} onClick={() => props.onCollection()}><Compass aria-hidden /><span>全部书签</span><small>{props.stats?.bookmarks ?? 0}</small></button>
+      <button className={props.favorite === 'true' ? 'active' : ''} onClick={() => props.onFavorite(props.favorite === 'true' ? undefined : 'true')}><Star aria-hidden /><span>星标收藏</span><small>{props.stats?.favorites ?? 0}</small></button>
+      <button className={props.collectionId === 'none' ? 'active' : ''} onClick={() => props.onCollection('none')}><CircleDashed aria-hidden /><span>未分类</span><small>{props.stats?.uncategorized ?? 0}</small></button>
+      <button className={props.trash ? 'active' : ''} onClick={() => props.onTrash()}><Trash2 aria-hidden /><span>回收站</span><small>{props.stats?.trashed ?? 0}</small></button>
     </nav>
 
     <section className="side-section collection-section">
-      <div className="section-title"><span>分类</span><button onClick={() => props.onCreateCollection(null)} title="新建根分类">+</button></div>
+      <div className="section-title">
+        <button className="section-title-main" onClick={() => props.onCollection()} title="查看全部分类"><span>分类</span></button>
+        <span className="section-count">{props.stats?.collections ?? 0}</span>
+        <button className="icon-btn" onClick={() => props.onCreateCollection(null)} title="新建根分类"><Plus /></button>
+      </div>
       <div className="collection-tree">
         {props.collections.length === 0 ? <p className="side-empty">还没有分类</p> : props.collections.map((collection) => <CollectionItem key={collection.id} collection={collection} depth={0} activeId={props.collectionId} collapsed={collapsed} onToggle={toggleCollapsed} onCollection={props.onCollection} onCreate={props.onCreateCollection} onRename={props.onRenameCollection} onDelete={props.onDeleteCollection} onDropBookmark={props.onDropBookmark} onReorderCollection={props.onReorderCollection} onContextMenu={setContextMenu} siblings={props.collections} />)}
       </div>
     </section>
 
     <section className="side-section tags-section">
-      <div className="section-title"><span>标签</span><span><small>{props.stats?.tags ?? 0}</small><button onClick={() => props.onManageTags()} title="管理标签">⚙</button></span></div>
+      <div className="section-title">
+        <span>标签</span>
+        <span className="section-count">{props.stats?.tags ?? 0}</span>
+        <button className="icon-btn" onClick={() => props.onManageTags()} title="管理标签"><Settings2 /></button>
+      </div>
       <div className="tag-list">
         {props.tags.length === 0 ? <p className="side-empty">标签会在收藏时自动创建</p> : props.tags.map((tag) => <div className={`tag-row ${props.tag === tag.name ? 'active' : ''}`} key={tag.id}>
-          <button onClick={() => props.onTag(props.tag === tag.name ? undefined : tag.name)}><span className="tag-dot" style={{ background: tag.color ?? '#8b8fc7' }} />{tag.name}<small>{tag.count}</small></button>
-          <button className="tag-delete" onClick={() => props.onDeleteTag(tag)} title="删除标签">×</button>
+          <button className="tag-main" onClick={() => props.onTag(props.tag === tag.name ? undefined : tag.name)}><span className="tag-dot" style={{ background: tag.color ?? 'var(--line)' }} />{tag.name}<small>{tag.count}</small></button>
+          <button className="icon-btn tag-delete" onClick={() => props.onDeleteTag(tag)} title="删除标签" aria-label={`删除标签 ${tag.name}`}><X /></button>
         </div>)}
       </div>
     </section>
-    <div className="sidebar-note">本地优先 · 数据保存在你的电脑</div>
+    <div className="sidebar-note"><Database aria-hidden /><span>本地优先 · 数据保存在你的电脑</span></div>
 
     {contextMenu && (() => {
       const MENU_W = 180; const MENU_H = 150;
       const x = Math.min(contextMenu.x, window.innerWidth - MENU_W - 8);
       const y = Math.min(contextMenu.y, window.innerHeight - MENU_H - 8);
       return <ul className="context-menu" role="menu" style={{ left: Math.max(8, x), top: Math.max(8, y) }} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
-        <li><button role="menuitem" onClick={() => handleContextAction('edit')}><span aria-hidden>✎</span><span>编辑分类…</span></button></li>
-        <li><button role="menuitem" onClick={() => handleContextAction('create')}><span aria-hidden>＋</span><span>新建子分类…</span></button></li>
+        <li><button role="menuitem" onClick={() => handleContextAction('edit')}><Pencil />编辑分类…</button></li>
+        <li><button role="menuitem" onClick={() => handleContextAction('create')}><Plus />新建子分类…</button></li>
         <li className="divider" aria-hidden="true" />
-        <li><button role="menuitem" className="danger" onClick={() => handleContextAction('delete')}><span aria-hidden>×</span><span>删除分类…</span></button></li>
+        <li><button role="menuitem" className="danger" onClick={() => handleContextAction('delete')}><X />删除分类…</button></li>
       </ul>;
     })()}
   </aside>;

@@ -1,5 +1,6 @@
 'use client';
 
+import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
 export function ThemeToggle() {
@@ -7,12 +8,15 @@ export function ThemeToggle() {
   const isDark = theme === 'dark';
   return (
     <button
-      className={`theme-switch ${isDark ? 'dark' : 'light'}`}
+      type="button"
+      className="icon-btn theme-toggle"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      title={isDark ? '切换为浅色' : '切换为深色'}
+      title={isDark ? '切换为浅色 · 坐标纸' : '切换为深色 · 夜空'}
       aria-label={isDark ? '切换为浅色' : '切换为深色'}
+      suppressHydrationWarning
     >
-      <span className="theme-switch-thumb">{isDark ? '🌙' : '☀️'}</span>
+      <Sun className="theme-icon-sun" aria-hidden />
+      <Moon className="theme-icon-moon" aria-hidden />
     </button>
   );
 }

@@ -235,7 +235,7 @@ export function listBookmarks(filters: BookmarkFilters): { items: Bookmark[]; to
       conditions.push(`b.collection_id IN (${ids.map(() => '?').join(',')})`);
       params.push(...ids);
     }
-  } else if (browseDirect) conditions.push('b.collection_id IS NULL');
+  }
   if (filters.tag) {
     conditions.push('EXISTS (SELECT 1 FROM bookmark_tags bt JOIN tags t ON t.id=bt.tag_id WHERE bt.bookmark_id=b.id AND t.name=?)');
     params.push(filters.tag);
