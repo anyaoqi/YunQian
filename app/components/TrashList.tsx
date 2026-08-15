@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { RotateCcw, X, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { TrashedBookmark } from '@/lib/types';
+import { useConfirm } from './ui/ConfirmDialog';
 import { Favicon, hostOf as domainOf } from './Favicon';
+import type { TrashedBookmark } from '@/lib/types';
 
 type Props = {
   onRestored: () => void;
@@ -18,6 +20,7 @@ export function TrashList({ onRestored }: Props) {
   const [items, setItems] = useState<TrashedBookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const confirm = useConfirm();
 
   const load = async () => {
     setLoading(true);
@@ -45,7 +48,13 @@ export function TrashList({ onRestored }: Props) {
   };
 
   const remove = async (bookmark: TrashedBookmark) => {
-    if (!window.confirm(`永久删除「${bookmark.title}」？此操作不可恢复。`)) return;
+    const ok = await confirm({
+      title: '永久删除?',
+      body: <>「<b>{bookmark.title || domainOf(bookmark.url)}</b>」将被永久删除,此操作不可恢复。</>,
+      confirmText: '永久删除',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.permanentlyDeleteBookmark(bookmark.id);
       await load();
@@ -56,7 +65,13 @@ export function TrashList({ onRestored }: Props) {
   };
 
   const empty = async () => {
-    if (!window.confirm('清空回收站？所有项目将被永久删除。')) return;
+    const ok = await confirm({
+      title: '清空回收站?',
+      body: <>全部 <b>{items.length}</b> 项将被永久删除,不可恢复。</>,
+      confirmText: '清空',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.emptyTrash();
       await load();
@@ -69,16 +84,13 @@ export function TrashList({ onRestored }: Props) {
   if (loading) return <div className="content-state"><span className="loader" />正在加载…</div>;
 
   return <div className="trash-view">
-    <div className="content-header">
-      <div>
-        <span className="eyebrow">回收站</span>
-        <h1>已删除的书签</h1>
-      </div>
-      {items.length > 0 && <button className="button danger" onClick={empty}>清空回收站</button>}
+    <div className="trash-head">
+      <h1>回收站</h1>
+      {items.length > 0 && <button className="button danger" onClick={empty}><Trash2 aria-hidden />清空回收站</button>}
     </div>
-    {error && <div className="error-banner"><span>!</span>{error}<button onClick={() => setError('')}>×</button></div>}
+    {error && <div className="error-banner"><X aria-hidden />{error}<button className="icon-btn" onClick={() => setError('')} aria-label="关闭错误"><X /></button></div>}
     {items.length === 0
-      ? <div className="content-state empty-state"><div className="empty-icon">🗑</div><h2>回收站是空的</h2><p>删除的书签会在这里保留 30 天。</p></div>
+      ? <div className="content-state empty-state"><div className="empty-mark"><Trash2 aria-hidden /></div><h2>回收站是空的</h2><p>删除的书签会在这里保留 30 天。</p></div>
       : <div className="bookmark-list">
           {items.map((bookmark) => <article className="bookmark-card trashed" key={bookmark.id}>
             <div className="bookmark-icon"><Favicon faviconUrl={bookmark.faviconUrl} url={bookmark.url} /></div>
@@ -89,13 +101,13 @@ export function TrashList({ onRestored }: Props) {
               </div>
               <div className="bookmark-meta">
                 <span className="date-chip">删除于 {relativeDate(bookmark.deletedAt)}</span>
-                {bookmark.categoryPath.length > 0 && <span className="category-path">▣ {bookmark.categoryPath.join(' › ')}</span>}
-                {bookmark.tags.map((tag) => <span key={tag} className="tag-chip">#{tag}</span>)}
+                {bookmark.categoryPath.length > 0 && <span className="chip category-path">{bookmark.categoryPath.join(' / ')}</span>}
+                {bookmark.tags.map((tag) => <span key={tag} className="chip">#{tag}</span>)}
               </div>
             </div>
             <div className="bookmark-actions">
-              <button onClick={() => restore(bookmark)} title="恢复"> 恢复</button>
-              <button onClick={() => remove(bookmark)} title="永久删除">×</button>
+              <button className="icon-btn trash-restore-btn" onClick={() => restore(bookmark)} title="恢复" aria-label="恢复"><RotateCcw /></button>
+              <button className="icon-btn danger" onClick={() => remove(bookmark)} title="永久删除" aria-label="永久删除"><X /></button>
             </div>
           </article>)}
         </div>}

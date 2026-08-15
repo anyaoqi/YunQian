@@ -1,0 +1,143 @@
+/* ============================================================
+   云签 · 星航图 — 设计 Token
+   浅色 = 白昼工程坐标纸 / 深色 = 夜空星图
+   方向合同与完整规范见 docs/08-ui-redesign.md
+   ============================================================ */
+
+:root {
+  /* —— 字体 —— */
+  --font-sans: var(--font-barlow), "PingFang SC", "HarmonyOS Sans SC", "MiSans",
+    "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: var(--font-azeret), "Cascadia Mono", Consolas, monospace;
+
+  /* —— 间距(4px 网格) —— */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* —— 字号(中文可读下限 12px) —— */
+  --text-xs: 11px;   /* 仅 mono 图例标注 */
+  --text-sm: 12px;   /* meta / chip */
+  --text-base: 13px; /* 次要正文 */
+  --text-body: 14px; /* 正文 */
+  --text-md: 15px;   /* 列表标题 */
+  --text-lg: 17px;   /* 区块标题 */
+  --text-xl: 20px;   /* 对话框标题 */
+  --text-2xl: 24px;  /* 页面标题 */
+
+  /* —— 圆角(仪表级) —— */
+  --radius-chip: 3px;
+  --radius-ctl: 5px;
+  --radius-card: 6px;
+
+  /* —— 动效 —— */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* —— 布局 —— */
+  --sidebar-w: 248px;
+  --content-max: 1560px;
+  --grid-cell: 24px; /* 坐标纸网格 */
+
+  /* ============================================================
+     浅色 · 工程坐标纸
+     ============================================================ */
+  --bg-page: #edf0ee;
+  --grid-minor: rgba(27, 40, 53, 0.045);
+  --grid-major: rgba(27, 40, 53, 0.08);
+  --bg-card: #f8faf8;
+  --bg-card-hover: #fdfefd;
+  --bg-inset: #e7ebe8; /* 输入框 / 内嵌区,略沉于纸面 */
+  --bg-overlay: rgba(19, 28, 38, 0.45);
+
+  --text-main: #1b2735; /* 墨蓝 */
+  --text-muted: #56687a;
+  --text-faint: #6b7e93; /* 仅装饰性 mono 标注,不承载正文 */
+  --text-on-accent: #fffaf5;
+
+  --accent: #c2410c; /* 信号橙 · 文字级(纸面 4.8:1) */
+  --accent-mark: #e8590c; /* 信号橙 · 图形标记级 */
+  --accent-hover: #a83a0a;
+  --accent-soft: rgba(232, 89, 12, 0.09);
+  --accent-ink-on-soft: #9a350a;
+
+  --line: #2f6f8f; /* 星座青蓝:连线 / 结构 / 链接 */
+  --line-soft: rgba(47, 111, 143, 0.3);
+  --line-faint: rgba(47, 111, 143, 0.14);
+
+  --hairline: rgba(27, 40, 53, 0.14);
+  --hairline-strong: rgba(27, 40, 53, 0.26);
+
+  --danger: #c2372f;
+  --danger-hover: #a72c25;
+  --danger-soft: rgba(194, 55, 47, 0.08);
+  --star-gold: #b9821f; /* 星标(favorites)图标色 */
+  --star-gold-dark: #8a5f14;
+
+  --shadow-card: 0 1px 2px rgba(23, 34, 46, 0.04), 0 3px 12px rgba(23, 34, 46, 0.05);
+  --shadow-raised: 0 2px 4px rgba(23, 34, 46, 0.06), 0 10px 28px rgba(23, 34, 46, 0.09);
+  --shadow-modal: 0 8px 20px rgba(15, 24, 34, 0.1), 0 28px 72px rgba(15, 24, 34, 0.22);
+  --focus-ring: 0 0 0 3px rgba(232, 89, 12, 0.25);
+
+  --selection-bg: rgba(232, 89, 12, 0.22);
+  --scrollbar-thumb: rgba(27, 40, 53, 0.22);
+  --scrollbar-track: transparent;
+
+  color-scheme: light;
+}
+
+/* ============================================================
+   深色 · 夜空
+   ============================================================ */
+html[data-theme="dark"] {
+  --bg-page: #0a0f1c;
+  --grid-minor: rgba(140, 170, 210, 0.07);
+  --grid-major: rgba(140, 170, 210, 0.13);
+  --bg-card: #101827;
+  --bg-card-hover: #141d2f;
+  --bg-inset: #0c1322;
+  --bg-overlay: rgba(3, 7, 14, 0.62);
+
+  --text-main: #e6edf5; /* 星白 */
+  --text-muted: #93a3b4;
+  --text-faint: #7c90a6;
+  --text-on-accent: #1a1206;
+
+  --accent: #d9a441; /* 星金 · 唯一强调色 */
+  --accent-mark: #e5b45a;
+  --accent-hover: #e8b759;
+  --accent-soft: rgba(217, 164, 65, 0.12);
+  --accent-ink-on-soft: #e8bd68;
+
+  --line: #6ec6b8; /* 青:星座连线 */
+  --line-soft: rgba(110, 198, 184, 0.32);
+  --line-faint: rgba(110, 198, 184, 0.14);
+
+  --hairline: rgba(230, 237, 245, 0.12);
+  --hairline-strong: rgba(230, 237, 245, 0.22);
+
+  --danger: #ff6b5e;
+  --danger-hover: #ff8377;
+  --danger-soft: rgba(255, 107, 94, 0.1);
+  --star-gold: #d9a441;
+  --star-gold-dark: #b98730;
+
+  --shadow-card: 0 0 0 1px rgba(230, 237, 245, 0.04);
+  --shadow-raised: 0 0 0 1px rgba(230, 237, 245, 0.06), 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 0 0 1px rgba(230, 237, 245, 0.06), 0 28px 80px rgba(0, 0, 0, 0.6);
+  --focus-ring: 0 0 0 3px rgba(217, 164, 65, 0.28);
+
+  --selection-bg: rgba(217, 164, 65, 0.3);
+  --scrollbar-thumb: rgba(230, 237, 245, 0.18);
+  --scrollbar-track: transparent;
+
+  color-scheme: dark;
+}

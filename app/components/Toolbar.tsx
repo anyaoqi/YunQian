@@ -1,49 +1,51 @@
 'use client';
 
 import { useRef } from 'react';
+import { Search, X, House, List, LayoutGrid, Upload, Download, Plus } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import type { Sort } from '@/lib/types';
 
 type Props = {
   query: string;
   sort: Sort;
-  total: number;
   view: 'list' | 'grid' | 'home';
   showHomeToggle?: boolean;
   onQueryChange: (value: string) => void;
   onSortChange: (value: Sort) => void;
   onAdd: () => void;
   onImport: () => void;
+  onOpenPalette: () => void;
   onViewChange?: (view: 'list' | 'grid' | 'home') => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 };
 
-export function Toolbar({ query, sort, total, view, showHomeToggle, onQueryChange, onSortChange, onAdd, onImport, onViewChange, searchInputRef }: Props) {
+export function Toolbar({ query, sort, view, showHomeToggle, onQueryChange, onSortChange, onAdd, onImport, onOpenPalette, onViewChange, searchInputRef }: Props) {
   const fallbackRef = useRef<HTMLInputElement>(null);
   const inputRef = searchInputRef || fallbackRef;
   return <header className="toolbar">
     <div className="search-wrap">
-      <span>⌕</span>
+      <Search aria-hidden />
       <input ref={inputRef} value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索标题、网址、备注…" aria-label="搜索书签" />
-      {query && <button className="clear-search" onClick={() => onQueryChange('')} aria-label="清空搜索">×</button>}
+      {query
+        ? <button type="button" className="icon-btn" onClick={() => onQueryChange('')} aria-label="清空搜索"><X /></button>
+        : <button type="button" className="kbd" onClick={onOpenPalette} title="命令面板" aria-label="打开命令面板">Ctrl K</button>}
     </div>
     <div className="toolbar-right">
-      <span className="result-count">{total} 条</span>
-      <select value={sort} onChange={(event) => onSortChange(event.target.value as Sort)} aria-label="排序方式">
+      <select className="select" value={sort} onChange={(event) => onSortChange(event.target.value as Sort)} aria-label="排序方式">
         <option value="newest">最近添加</option><option value="oldest">最早添加</option><option value="title">标题 A–Z</option><option value="popular">访问最多</option>
       </select>
-      <div className="view-toggle">
-        {showHomeToggle && <button className={view === 'home' ? 'active' : ''} onClick={() => onViewChange?.('home')} title="导航面板">⌂</button>}
-        <button className={view === 'list' ? 'active' : ''} onClick={() => onViewChange?.('list')} title="列表视图">≣</button>
-        <button className={view === 'grid' ? 'active' : ''} onClick={() => onViewChange?.('grid')} title="网格视图">▦</button>
+      <div className="view-toggle" role="group" aria-label="视图切换">
+        {showHomeToggle && <button className={view === 'home' ? 'active' : ''} onClick={() => onViewChange?.('home')} title="星图导航"><House aria-hidden /></button>}
+        <button className={view === 'list' ? 'active' : ''} onClick={() => onViewChange?.('list')} title="列表视图"><List aria-hidden /></button>
+        <button className={view === 'grid' ? 'active' : ''} onClick={() => onViewChange?.('grid')} title="网格视图"><LayoutGrid aria-hidden /></button>
       </div>
-      <button className="button secondary" onClick={onImport}>⇧ 导入</button>
-      <div className="export-menu">
-        <a className="button secondary" href="/api/export">⇩ 导出 JSON</a>
+      <button type="button" className="button secondary" onClick={onImport}><Upload aria-hidden />导入</button>
+      <div className="export-group">
         <a className="button secondary" href="/api/export?format=html" title="导出为浏览器可导入的 HTML">HTML</a>
+        <a className="button secondary" href="/api/export"><Download aria-hidden />导出</a>
       </div>
-      <button className="button primary" onClick={onAdd}>+ 添加书签</button>
       <ThemeToggle />
+      <button type="button" className="button primary" onClick={onAdd}><Plus aria-hidden />添加书签</button>
     </div>
   </header>;
 }

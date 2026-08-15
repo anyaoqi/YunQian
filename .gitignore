@@ -10,3 +10,5 @@ app/data/
 .DS_Store
 *.tsbuildinfo
 .pnpm-store/
+.impeccable/
+.zcode/

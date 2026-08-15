@@ -45,8 +45,7 @@ export const api = {
   fetchTitle: (url: string) => request<{ title: string | null; description: string | null; coverUrl: string | null; faviconUrl: string | null }>('/fetch-title', json('POST', { url })),
   refetchBookmark: (id: number) => request<Bookmark>(`/bookmarks/${id}/refetch`, { method: 'POST' }),
   refetchBatch: (limit?: number) => request<{ queued: number }>('/bookmarks/refetch', json('POST', limit ? { limit } : {})),
-  importHtml: async (file: File, mode: 'skip' | 'overwrite' = 'skip', format: 'netscape' | 'raindrop' | 'toby' | 'pocket' = 'netscape') => {
-    const html = await file.text();
-    return request<ImportResult>('/import', json('POST', { html, mode, format }));
+  importHtml: async (content: string, mode: 'skip' | 'overwrite' = 'skip', format: 'netscape' | 'raindrop' | 'toby' | 'pocket' = 'netscape') => {
+    return request<ImportResult>('/import', json('POST', { html: content, mode, format }));
   },
 };
