@@ -63,13 +63,13 @@ export async function fetchMetadata(rawUrl: string): Promise<MetadataResult> {
  * 用 COALESCE 保留用户已编辑过的非空值，仅填充缺失字段；
  * favicon_url 始终基于域名刷新。
  */
-export async function refetchBookmark(bookmarkId: number): Promise<Bookmark> {
-  const row = getDb().prepare('SELECT url FROM bookmarks WHERE id=? AND deleted_at IS NULL').get(bookmarkId) as { url: string } | undefined;
+export async function refetchBookmark(userId: number, bookmarkId: number): Promise<Bookmark> {
+  const row = getDb().prepare('SELECT url FROM bookmarks WHERE id=? AND user_id=? AND deleted_at IS NULL').get(bookmarkId, userId) as { url: string } | undefined;
   if (!row) throw notFound('书签');
   const meta = await fetchMetadata(row.url);
-  getDb().prepare(`UPDATE bookmarks SET description=COALESCE(?, description), cover_url=COALESCE(?, cover_url), favicon_url=?, updated_at=? WHERE id=?`)
-    .run(meta.description, meta.coverUrl, meta.faviconUrl, now(), bookmarkId);
-  return getBookmark(bookmarkId);
+  getDb().prepare(`UPDATE bookmarks SET description=COALESCE(?, description), cover_url=COALESCE(?, cover_url), favicon_url=?, updated_at=? WHERE id=? AND user_id=?`)
+    .run(meta.description, meta.coverUrl, meta.faviconUrl, now(), bookmarkId, userId);
+  return getBookmark(userId, bookmarkId);
 }
 
 const processing = new Set<number>();
@@ -113,15 +113,14 @@ async function processQueue(ids: number[]): Promise<void> {
 }
 
 /**
- * 把「缺少 description 且缺少 cover_url」的书签放入内存队列后台补抓。
- * 立即返回入队数量，不阻塞调用方；进程重启队列丢失（本地单用户可接受）。
+ * 把当前用户「缺少 description 且缺少 cover_url」的书签放入内存队列后台补抓。
  */
-export function enqueueBatchRefetch(limit = 200): { queued: number } {
+export function enqueueBatchRefetch(userId: number, limit = 200): { queued: number } {
   const rows = getDb().prepare(`
     SELECT id FROM bookmarks
-    WHERE deleted_at IS NULL AND description IS NULL AND cover_url IS NULL
+    WHERE user_id=? AND deleted_at IS NULL AND description IS NULL AND cover_url IS NULL
     ORDER BY created_at DESC LIMIT ?
-  `).all(limit) as Array<{ id: number }>;
+  `).all(userId, limit) as Array<{ id: number }>;
   const ids = rows.map((row) => row.id).filter((id) => !processing.has(id));
   for (const id of ids) processing.add(id);
   if (ids.length > 0) void processQueue(ids);

@@ -78,3 +78,31 @@ export const reorderSchema = z.object({
   parentId: z.number().int().positive().nullable(),
   orderedIds: z.array(z.number().int().positive()).min(1).max(200),
 });
+
+export const registerSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, '用户名至少需要 3 个字符')
+    .max(30, '用户名不能超过 30 个字符')
+    .regex(/^[a-zA-Z0-9_\u4e00-\u9fa5-]+$/, '用户名只能包含中英文字符、数字、下划线和连字符'),
+  password: z.string().min(6, '密码至少需要 6 个字符').max(100, '密码长度不能超过 100 个字符'),
+  email: z.string().trim().email('邮箱格式不正确').max(100).nullable().optional(),
+  nickname: z.string().trim().max(50).nullable().optional(),
+});
+
+export const loginSchema = z.object({
+  account: z.string().trim().min(1, '请输入用户名或邮箱').max(100),
+  password: z.string().min(1, '请输入密码').max(100),
+});
+
+export const passwordChangeSchema = z.object({
+  oldPassword: z.string().min(1, '请输入当前密码'),
+  newPassword: z.string().min(6, '新密码至少需要 6 个字符').max(100, '新密码长度不能超过 100 个字符'),
+});
+
+export const profileUpdateSchema = z.object({
+  nickname: z.string().trim().max(50).nullable().optional(),
+  email: z.string().trim().email('邮箱格式不正确').max(100).nullable().optional(),
+  avatarUrl: z.string().trim().max(1000).nullable().optional(),
+});

@@ -1,15 +1,21 @@
-import { z } from 'zod';
-import { mergeTags } from '@/lib/server/services/taxonomy';
+import { requireAuth } from '@/lib/server/lib/auth-context';
 import { handleRouteError } from '@/lib/server/lib/errors';
+import { idParamSchema } from '@/lib/server/lib/validators';
+import { mergeTags } from '@/lib/server/services/taxonomy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string; targetId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string; targetId: string }> },
+) {
   try {
-    const { id, targetId } = await params;
-    const ids = z.object({ id: z.coerce.number().int().positive(), targetId: z.coerce.number().int().positive() }).parse({ id, targetId });
-    return Response.json(mergeTags(ids.id, ids.targetId));
+    const user = requireAuth(request);
+    const resolved = await params;
+    const { id: sourceId } = idParamSchema.parse({ id: resolved.id });
+    const { id: targetId } = idParamSchema.parse({ id: resolved.targetId });
+    return Response.json(mergeTags(user.id, sourceId, targetId));
   } catch (error) {
     return handleRouteError(error);
   }

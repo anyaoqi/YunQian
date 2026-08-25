@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { Collection, Stats, Tag } from '@/lib/types';
 import { Logo } from './Logo';
+import { UserMenu } from './UserMenu';
 
 const COLLAPSED_KEY = 'yunqian:collapsed-tree';
 
@@ -198,6 +199,7 @@ export function Sidebar(props: Props) {
         </div>)}
       </div>
     </section>
+    <UserMenu collapsed={props.collapsed} />
     <div className="sidebar-note"><Database aria-hidden /><span>本地优先 · 数据保存在你的电脑</span></div>
 
     {contextMenu && (() => {

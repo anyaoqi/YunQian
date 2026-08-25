@@ -21,6 +21,7 @@ import { TagManageDialog } from '@/components/TagManageDialog';
 import { TrashList } from '@/components/TrashList';
 import { ConfirmProvider, useConfirm } from '@/components/ui/ConfirmDialog';
 import { ToastProvider, useToast } from '@/components/ui/Toast';
+import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { Bookmark, BookmarkFilters, Collection, Sort, Stats, Tag } from '@/lib/types';
 
@@ -90,6 +91,7 @@ function AppInner() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const confirm = useConfirm();
   const toast = useToast();
+  const { user } = useAuth();
 
   const refreshTaxonomy = useCallback(async () => {
     try {
@@ -313,6 +315,12 @@ function AppInner() {
             {(filters.tag || filters.q) && <button className="filter-reset" onClick={() => { setSearchText(''); updateFilters({ tag: undefined, q: undefined, direct: 'true' }); }}><X aria-hidden />返回层级浏览</button>}
           </section>}
           {error && <div className="error-banner"><AlertCircle aria-hidden />{error}<button className="icon-btn" onClick={() => setError('')} aria-label="关闭错误"><X /></button></div>}
+          {user?.isDefaultPassword && (
+            <div className="error-banner" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+              <AlertCircle aria-hidden />
+              <span>当前正在使用初始默认管理员密码（admin123），建议前往左下角用户菜单「修改密码」以确保账户安全。</span>
+            </div>
+          )}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={viewKey}

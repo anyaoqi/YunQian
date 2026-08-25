@@ -1,3 +1,16 @@
+export type User = {
+  id: number;
+  username: string;
+  email: string | null;
+  nickname: string | null;
+  avatarUrl: string | null;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  isDefaultPassword?: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Bookmark = {
   id: number;
   url: string;

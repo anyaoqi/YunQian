@@ -1,15 +1,17 @@
+import { requireAuth } from '@/lib/server/lib/auth-context';
+import { handleRouteError } from '@/lib/server/lib/errors';
 import { batchTagsSchema } from '@/lib/server/lib/validators';
 import { batchAddTags } from '@/lib/server/services/bookmarks';
-import { handleRouteError } from '@/lib/server/lib/errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    const user = requireAuth(request);
     const body = await request.json();
-    const input = batchTagsSchema.parse(body);
-    return Response.json(batchAddTags(input.ids, input.tags));
+    const { ids, tags } = batchTagsSchema.parse(body);
+    return Response.json(batchAddTags(user.id, ids, tags));
   } catch (error) {
     return handleRouteError(error);
   }
