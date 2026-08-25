@@ -10,6 +10,7 @@ type Props = {
   sort: Sort;
   view: 'list' | 'grid' | 'home';
   showHomeToggle?: boolean;
+  showViewToggle?: boolean;
   onQueryChange: (value: string) => void;
   onSortChange: (value: Sort) => void;
   onAdd: () => void;
@@ -19,7 +20,7 @@ type Props = {
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 };
 
-export function Toolbar({ query, sort, view, showHomeToggle, onQueryChange, onSortChange, onAdd, onImport, onOpenPalette, onViewChange, searchInputRef }: Props) {
+export function Toolbar({ query, sort, view, showHomeToggle, showViewToggle = true, onQueryChange, onSortChange, onAdd, onImport, onOpenPalette, onViewChange, searchInputRef }: Props) {
   const fallbackRef = useRef<HTMLInputElement>(null);
   const inputRef = searchInputRef || fallbackRef;
   return <header className="toolbar">
@@ -34,11 +35,13 @@ export function Toolbar({ query, sort, view, showHomeToggle, onQueryChange, onSo
       <select className="select" value={sort} onChange={(event) => onSortChange(event.target.value as Sort)} aria-label="排序方式">
         <option value="newest">最近添加</option><option value="oldest">最早添加</option><option value="title">标题 A–Z</option><option value="popular">访问最多</option>
       </select>
-      <div className="view-toggle" role="group" aria-label="视图切换">
+      {(showHomeToggle || showViewToggle) && <div className="view-toggle" role="group" aria-label="视图切换">
         {showHomeToggle && <button className={view === 'home' ? 'active' : ''} onClick={() => onViewChange?.('home')} title="星图导航"><House aria-hidden /></button>}
-        <button className={view === 'list' ? 'active' : ''} onClick={() => onViewChange?.('list')} title="列表视图"><List aria-hidden /></button>
-        <button className={view === 'grid' ? 'active' : ''} onClick={() => onViewChange?.('grid')} title="网格视图"><LayoutGrid aria-hidden /></button>
-      </div>
+        {showViewToggle && <>
+          <button className={view === 'list' ? 'active' : ''} onClick={() => onViewChange?.('list')} title="列表视图"><List aria-hidden /></button>
+          <button className={view === 'grid' ? 'active' : ''} onClick={() => onViewChange?.('grid')} title="网格视图"><LayoutGrid aria-hidden /></button>
+        </>}
+      </div>}
       <button type="button" className="button secondary" onClick={onImport}><Upload aria-hidden />导入</button>
       <div className="export-group">
         <a className="button secondary" href="/api/export?format=html" title="导出为浏览器可导入的 HTML">HTML</a>

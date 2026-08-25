@@ -20,6 +20,7 @@ type BookmarkFilters = {
   tag?: string;
   favorite?: 'true' | 'false';
   direct?: 'true' | 'false';
+  all?: 'true';
   sort: 'newest' | 'oldest' | 'title' | 'popular';
   page: number;
   pageSize: number;
@@ -246,19 +247,21 @@ export function listBookmarks(filters: BookmarkFilters): { items: Bookmark[]; to
     newest: 'b.created_at DESC', oldest: 'b.created_at ASC', title: 'b.title COLLATE NOCASE ASC', popular: 'b.click_count DESC, b.created_at DESC',
   };
   const total = (getDb().prepare(`SELECT COUNT(*) AS count FROM bookmarks b ${where}`).get(...params) as { count: number }).count;
+  // all 模式(浏览视图整树渲染)跳过分页,一次返回全部结果
+  const fetchAll = filters.all === 'true';
   const rows = getDb().prepare(`
     SELECT b.id, b.url, b.title, b.description, b.note, b.favicon_url AS faviconUrl,
       b.cover_url AS coverUrl, b.is_favorite AS isFavorite, b.click_count AS clickCount,
       b.last_visited_at AS lastVisitedAt, b.collection_id AS collectionId, c.name AS collectionName,
       b.created_at AS createdAt, b.updated_at AS updatedAt
     FROM bookmarks b LEFT JOIN collections c ON c.id=b.collection_id ${where}
-    ORDER BY ${orderBy[filters.sort]} LIMIT ? OFFSET ?
-  `).all(...params, filters.pageSize, (filters.page - 1) * filters.pageSize) as BookmarkRow[];
+    ORDER BY ${orderBy[filters.sort]} ${fetchAll ? 'LIMIT -1' : 'LIMIT ? OFFSET ?'}
+  `).all(...(fetchAll ? params : [...params, filters.pageSize, (filters.page - 1) * filters.pageSize])) as BookmarkRow[];
   const tags = getTagsForBookmarkIds(rows.map((row) => row.id));
   const categoryPaths = getCategoryPaths(rows.flatMap((row) => row.collectionId === null ? [] : [row.collectionId]));
   return {
     items: rows.map((row) => toBookmark(row, tags.get(row.id) ?? [], row.collectionId === null ? [] : (categoryPaths.get(row.collectionId) ?? []))),
-    total, page: filters.page, pageSize: filters.pageSize,
+    total, page: fetchAll ? 1 : filters.page, pageSize: fetchAll ? total : filters.pageSize,
   };
 }
 

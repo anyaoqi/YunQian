@@ -38,6 +38,7 @@ export type BookmarkFilters = {
   tag?: string;
   favorite?: 'true' | 'false';
   direct?: 'true' | 'false';
+  all?: 'true';
   sort: Sort;
   page: number;
   pageSize: number;

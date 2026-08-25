@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, X, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { pathToCategory } from '@/lib/treeUtils';
 import { BatchActionBar } from '@/components/BatchActionBar';
 import { BatchDialog } from '@/components/BatchDialog';
 import { BookmarkDialog } from '@/components/BookmarkDialog';
 import { BookmarkList } from '@/components/BookmarkList';
+import { CategorySections } from '@/components/CategorySections';
 import { CollectionDialog } from '@/components/CollectionDialog';
 import { CommandPalette } from '@/components/CommandPalette';
 import { GridView } from '@/components/GridView';
@@ -52,18 +54,6 @@ function parseView(raw: string | null): BookmarkFilters {
   }
 }
 
-function pathToCategory(categories: Collection[], id: number): Collection[] {
-  for (const category of categories) {
-    if (category.id === id) return [category];
-    const childPath = pathToCategory(category.children, id);
-    if (childPath.length > 0) return [category, ...childPath];
-  }
-  return [];
-}
-
-function favoriteSubtreeCount(category: Collection): number {
-  return category.children.reduce((sum, child) => sum + favoriteSubtreeCount(child), category.favoriteCount);
-}
 
 export default function App() {
   return (
@@ -130,10 +120,16 @@ function AppInner() {
     const timer = window.setTimeout(() => setFilters((old) => ({ ...old, q: searchText || undefined, direct: searchText ? undefined : 'true', page: 1 })), 300);
     return () => window.clearTimeout(timer);
   }, [searchText]);
+  const browsing = filters.direct === 'true';
+  // 浏览模式(分区视图)一次拉取当前 scope 子树全部书签;搜索/标签筛选仍走分页
+  const fetchFilters = useMemo(
+    () => (browsing ? { ...filters, direct: undefined, all: 'true' as const } : filters),
+    [filters, browsing],
+  );
   useEffect(() => {
     let active = true;
     setLoading(true); setError('');
-    api.bookmarks(filters).then((result) => {
+    api.bookmarks(fetchFilters).then((result) => {
       if (!active) return;
       setItems(result.items); setTotal(result.total); setLoading(false);
     }).catch((reason) => {
@@ -141,7 +137,7 @@ function AppInner() {
       setError(reason instanceof Error ? reason.message : '无法加载书签'); setLoading(false);
     });
     return () => { active = false; };
-  }, [filters, refreshKey]);
+  }, [fetchFilters, refreshKey]);
 
   // Ctrl/⌘ + K 命令面板
   useEffect(() => {
@@ -157,7 +153,6 @@ function AppInner() {
 
   const updateFilters = (patch: Partial<BookmarkFilters>) => setFilters((old) => ({ ...old, ...patch, page: patch.page ?? 1 }));
   const refresh = () => setRefreshKey((value) => value + 1);
-  const browsing = filters.direct === 'true';
   const favoriteMode = filters.favorite === 'true';
   // 是否处于根级首页(无任何筛选),用于决定是否可显示导航面板
   const atRoot = !filters.collectionId && !filters.tag && !filters.favorite && !filters.q && !trashMode;
@@ -168,11 +163,16 @@ function AppInner() {
   const rootLabel = favoriteMode ? '星标收藏' : filters.collectionId === 'none' ? '未分类' : '全部书签';
   const visibleCategories = useMemo(() => {
     if (!browsing || filters.collectionId === 'none') return [];
-    const level = typeof filters.collectionId === 'number'
+    return typeof filters.collectionId === 'number'
       ? (breadcrumbTrail.at(-1)?.children ?? [])
       : collections;
-    return favoriteMode ? level.filter((category) => favoriteSubtreeCount(category) > 0) : level;
-  }, [browsing, collections, breadcrumbTrail, filters.collectionId, favoriteMode]);
+  }, [browsing, collections, breadcrumbTrail, filters.collectionId]);
+  // 当前 scope 直属(未归入子分类)的书签:根/未分类 scope 取 collectionId 为 null,分类 scope 取其自身 id
+  const scopeId = typeof filters.collectionId === 'number' ? filters.collectionId : null;
+  const directItems = useMemo(() => items.filter((item) => item.collectionId === scopeId), [items, scopeId]);
+  const directTitle = typeof filters.collectionId === 'number'
+    ? `${breadcrumbTrail.at(-1)?.name ?? '当前分类'} · 直属`
+    : '未分类';
   const activeTitle = useMemo(() => {
     if (filters.q) return `搜索「${filters.q}」`;
     if (filters.tag) return `#${filters.tag}`;
@@ -272,7 +272,7 @@ function AppInner() {
   const exitTrash = () => { setTrashMode(false); };
   const pageCount = Math.max(1, Math.ceil(total / filters.pageSize));
   const homeActive = atRoot && viewMode === 'home';
-  const viewKey = trashMode ? 'trash' : homeActive ? 'home' : viewMode;
+  const viewKey = trashMode ? 'trash' : homeActive ? 'home' : browsing ? 'browse' : viewMode;
 
   const visit = (bookmark: Bookmark) => { void api.visitBookmark(bookmark.id).catch(() => undefined); };
 
@@ -296,7 +296,7 @@ function AppInner() {
       {trashMode
         ? <TrashList onRestored={refresh} />
         : <>
-          <Toolbar query={searchText} sort={filters.sort} view={viewMode} showHomeToggle={atRoot} onQueryChange={setSearchText} onSortChange={(sort) => updateFilters({ sort })} onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onOpenPalette={() => setPaletteOpen(true)} onViewChange={setViewMode} searchInputRef={searchInputRef} />
+          <Toolbar query={searchText} sort={filters.sort} view={viewMode} showHomeToggle={atRoot} showViewToggle={!browsing || homeActive} onQueryChange={setSearchText} onSortChange={(sort) => updateFilters({ sort })} onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onOpenPalette={() => setPaletteOpen(true)} onViewChange={setViewMode} searchInputRef={searchInputRef} />
           {!homeActive && <section className="content-header">
             <div>
               <nav className="breadcrumb" aria-label="分类层级">
@@ -323,6 +323,33 @@ function AppInner() {
             >
               {homeActive
                 ? <HomePanel onVisit={visit} onAdd={openNewBookmark} onImport={() => setImportDialog(true)} />
+                : browsing
+                ? <CategorySections
+                    categories={visibleCategories}
+                    directBookmarks={directItems}
+                    items={items}
+                    directTitle={directTitle}
+                    scopeKey={typeof filters.collectionId === 'number' ? String(filters.collectionId) : filters.collectionId ?? 'root'}
+                    favoriteMode={favoriteMode}
+                    loading={loading}
+                    selectedIds={selectedIds}
+                    onAdd={openNewBookmark}
+                    onImport={() => setImportDialog(true)}
+                    onEdit={openEditBookmark}
+                    onDelete={removeBookmark}
+                    onFavorite={toggleFavorite}
+                    onRefetch={refetchSingle}
+                    onVisit={visit}
+                    onToggleSelect={toggleSelect}
+                    onOpenCategory={(category) => updateFilters({ collectionId: category.id, tag: undefined, direct: 'true' })}
+                    onCreateCategory={createCollection}
+                    onRenameCategory={renameCollection}
+                    onDeleteCategory={removeCollection}
+                    onDropBookmark={async (collectionId, bookmarkId) => {
+                      try { await api.updateBookmark(bookmarkId, { collectionId }); refresh(); }
+                      catch (reason) { setError(reason instanceof Error ? reason.message : '移动失败'); }
+                    }}
+                  />
                 : viewMode === 'grid'
                 ? <GridView bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds}
                     onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite} onRefetch={refetchSingle}
@@ -341,7 +368,7 @@ function AppInner() {
           </AnimatePresence>
           <BatchActionBar count={selectedIds.size} total={items.length} onMove={() => setBatchDialogMode('move')} onTags={() => setBatchDialogMode('tags')} onDelete={batchDelete} onClear={clearSelection} onSelectAll={selectAll} />
           <BatchDialog open={!!batchDialogMode} mode={batchDialogMode} collections={collections} onClose={() => setBatchDialogMode(null)} onMove={batchMove} onAddTags={batchAddTags} />
-          {!loading && total > filters.pageSize && <nav className="pagination" aria-label="分页">
+          {!loading && !browsing && total > filters.pageSize && <nav className="pagination" aria-label="分页">
             <button disabled={filters.page <= 1} onClick={() => updateFilters({ page: filters.page - 1 })}><ChevronLeft aria-hidden />上一页</button>
             <span className="mono">第 {filters.page} / {pageCount} 页</span>
             <button disabled={filters.page >= pageCount} onClick={() => updateFilters({ page: filters.page + 1 })}>下一页<ChevronRight aria-hidden /></button>
