@@ -2,6 +2,7 @@
 
 import { Folder, ChevronRight, Star, RefreshCw, Pencil, X, Telescope } from 'lucide-react';
 import type { Bookmark, Collection } from '@/lib/types';
+import { subtreeTotal } from '@/lib/treeUtils';
 import { Favicon, hostOf as domainOf } from './Favicon';
 
 type Props = {
@@ -34,10 +35,6 @@ function relativeDate(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value));
 }
 
-function subtreeTotal(category: Collection, favoriteMode: boolean): number {
-  const own = favoriteMode ? category.favoriteCount : category.bookmarkCount;
-  return category.children.reduce((sum, child) => sum + subtreeTotal(child, favoriteMode), own);
-}
 
 export function BookmarkList(props: Props) {
   const { bookmarks, categories, browsing, favoriteMode, loading, onEdit, onDelete, onFavorite, onRefetch, onVisit, onTag, onAdd, onImport, selectedIds, onToggleSelect } = props;

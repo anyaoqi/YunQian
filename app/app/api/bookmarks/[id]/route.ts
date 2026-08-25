@@ -1,20 +1,16 @@
-import { bookmarkUpdateSchema } from '@/lib/server/lib/validators';
+import { requireAuth } from '@/lib/server/lib/auth-context';
+import { handleRouteError } from '@/lib/server/lib/errors';
+import { bookmarkUpdateSchema, idParamSchema } from '@/lib/server/lib/validators';
 import { deleteBookmark, getBookmark, updateBookmark } from '@/lib/server/services/bookmarks';
-import { AppError, handleRouteError } from '@/lib/server/lib/errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function parseId(params: Promise<{ id: string }>): Promise<number> {
-  const parsed = Number((await params).id);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new AppError(400, 'INVALID_ID', 'id 参数不合法');
-  return parsed;
-}
-
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = await parseId(params);
-    return Response.json(getBookmark(id));
+    const user = requireAuth(request);
+    const { id } = idParamSchema.parse(await params);
+    return Response.json(getBookmark(user.id, id));
   } catch (error) {
     return handleRouteError(error);
   }
@@ -22,19 +18,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = await parseId(params);
+    const user = requireAuth(request);
+    const { id } = idParamSchema.parse(await params);
     const body = await request.json();
     const input = bookmarkUpdateSchema.parse(body);
-    return Response.json(updateBookmark(id, input));
+    return Response.json(updateBookmark(user.id, id, input));
   } catch (error) {
     return handleRouteError(error);
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = await parseId(params);
-    deleteBookmark(id);
+    const user = requireAuth(request);
+    const { id } = idParamSchema.parse(await params);
+    deleteBookmark(user.id, id);
     return new Response(null, { status: 204 });
   } catch (error) {
     return handleRouteError(error);

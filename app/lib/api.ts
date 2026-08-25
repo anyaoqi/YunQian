@@ -1,8 +1,13 @@
-import type { Bookmark, BookmarkFilters, BookmarkPayload, Collection, ImportResult, PaginatedBookmarks, Stats, Tag, TrashedBookmark } from '@/lib/types';
+import type { Bookmark, BookmarkFilters, BookmarkPayload, Collection, ImportResult, PaginatedBookmarks, Stats, Tag, TrashedBookmark, User } from '@/lib/types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, init);
   if (!response.ok) {
+    if (response.status === 401) {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      }
+    }
     const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
     throw new Error(body?.error?.message ?? `请求失败（${response.status}）`);
   }
@@ -15,6 +20,15 @@ function json(method: string, body?: unknown): RequestInit {
 }
 
 export const api = {
+  // 认证
+  me: () => request<{ user: User | null }>('/auth/me'),
+  login: (payload: { account: string; password: string }) => request<{ user: User }>('/auth/login', json('POST', payload)),
+  register: (payload: { username: string; password: string; email?: string | null; nickname?: string | null }) => request<{ user: User }>('/auth/register', json('POST', payload)),
+  logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
+  changePassword: (payload: { oldPassword: string; newPassword: string }) => request<{ success: boolean }>('/auth/password', json('POST', payload)),
+  updateProfile: (payload: { nickname?: string | null; email?: string | null; avatarUrl?: string | null }) => request<{ user: User }>('/auth/profile', json('PATCH', payload)),
+
+  // 业务
   stats: () => request<Stats>('/stats'),
   collections: () => request<Collection[]>('/collections'),
   tags: () => request<Tag[]>('/tags'),

@@ -1,5 +1,5 @@
 /* 云签 · 星航图 — 样式入口
-   分层:tokens → base → components(primitives / shell / views / dialogs)
+   分层:tokens → base → components(primitives / shell / views / dialogs / auth)
    设计方向合同见 docs/08-ui-redesign.md */
 
 @import "./styles/tokens.css";
@@ -8,3 +8,4 @@
 @import "./styles/components/shell.css";
 @import "./styles/components/views.css";
 @import "./styles/components/dialogs.css";
+@import "./styles/components/auth.css";

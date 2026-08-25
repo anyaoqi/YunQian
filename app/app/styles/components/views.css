@@ -56,29 +56,9 @@
   opacity: 0.22;
 }
 
-/* 星图容器(星座线 overlay 的定位基准) */
+/* 星图容器 */
 .star-field {
   position: relative;
-}
-.star-field-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-}
-.star-field-svg line {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 1.5;
-  stroke-dasharray: 600;
-  stroke-dashoffset: 600;
-  opacity: 0.85;
-}
-.star-field-svg.animate line {
-  transition: stroke-dashoffset 0.5s var(--ease);
-  stroke-dashoffset: 0;
 }
 
 .home-grid {
@@ -105,12 +85,6 @@
   border-color: var(--accent-mark);
   background: var(--bg-card-hover);
   box-shadow: var(--shadow-card);
-}
-.home-tile.constellation {
-  border-color: var(--line);
-}
-.home-tile.dimmed {
-  opacity: 0.45;
 }
 .home-tile-star {
   position: relative;
@@ -744,6 +718,276 @@ html[data-theme="dark"] .home-tile.mag-2 .home-tile-star {
 .batch-actions .button {
   padding: 7px 12px;
   font-size: var(--text-sm);
+}
+
+/* —— 浏览 · 分区导航视图(参考导航站:区块 + 横向子导航 + 紧凑卡) —— */
+.cat-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+.cat-section {
+  display: flex;
+  flex-direction: column;
+  /* 区块级懒渲染:长页面滚动到才布局绘制 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
+}
+.cat-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  margin: 0 calc(-1 * var(--space-3));
+  border-radius: var(--radius-ctl);
+  border: 1px solid transparent;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.cat-section-head.drag-over {
+  border-color: var(--line-soft);
+  background: var(--accent-soft);
+}
+.cat-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: var(--text-main);
+  cursor: pointer;
+}
+.cat-section-title.static {
+  cursor: default;
+}
+.cat-section-title h3 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--dur-fast) var(--ease);
+}
+button.cat-section-title:hover h3 {
+  color: var(--line);
+}
+.cat-section-enter {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--text-faint);
+  transition: transform var(--dur-base) var(--ease), color var(--dur-fast) var(--ease);
+}
+button.cat-section-title:hover .cat-section-enter {
+  color: var(--line);
+  transform: translateX(2px);
+}
+.cat-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.cat-section-head:hover .cat-section-actions,
+.cat-section-head:focus-within .cat-section-actions {
+  opacity: 1;
+}
+
+/* 横向子导航:文字式 tab,选中态用下划线指示,不占大块面积 */
+.subnav-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  margin-top: 5px;
+  padding: 0 var(--space-3);
+}
+.subnav-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 1px 5px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+.subnav-chip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background var(--dur-fast) var(--ease);
+}
+.subnav-chip:hover {
+  color: var(--text-main);
+}
+.subnav-chip.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.subnav-chip.active::after {
+  background: var(--accent-mark);
+}
+.cat-section-empty {
+  margin: var(--space-2) 0 0;
+  padding: 0 var(--space-3);
+  color: var(--text-faint);
+  font-size: var(--text-base);
+}
+
+/* 紧凑导航卡 */
+.nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+.nav-card {
+  position: relative;
+  display: flex;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-base) var(--ease),
+    transform var(--dur-base) var(--ease);
+}
+.nav-card:hover {
+  border-color: var(--hairline-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-raised);
+}
+.nav-card.selected {
+  border-color: var(--accent-mark);
+  box-shadow: inset 0 0 0 1px var(--accent-mark);
+}
+.nav-card-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 14px var(--space-4);
+  text-decoration: none;
+}
+.nav-card-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-chip);
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+.nav-card-icon img,
+.nav-card-icon .favicon-fallback {
+  width: 22px;
+  height: 22px;
+}
+.nav-card-icon .favicon-fallback {
+  display: grid;
+  place-items: center;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.nav-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.nav-card-title {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--dur-fast) var(--ease);
+}
+.nav-card-main:hover .nav-card-title {
+  color: var(--line);
+}
+.nav-card-desc {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-card-star {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  display: inline-flex;
+  color: var(--star-gold);
+  pointer-events: none;
+}
+.nav-card-star svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+  fill: currentColor;
+}
+.nav-checkbox {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 2;
+  margin: 0;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.nav-card:hover .nav-checkbox,
+.nav-card.selected .nav-checkbox {
+  opacity: 1;
+}
+.nav-card-actions {
+  position: absolute;
+  top: 4px;
+  right: var(--space-2);
+  display: flex;
+  gap: 2px;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.nav-card:hover .nav-card-actions,
+.nav-card.selected .nav-card-actions,
+.nav-card:focus-within .nav-card-actions {
+  opacity: 1;
+}
+.nav-card-actions .icon-btn {
+  width: 24px;
+  height: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--hairline);
+}
+.nav-card-actions .icon-btn svg {
+  width: 13px;
+  height: 13px;
+}
+.nav-card-actions .icon-btn.favorite.active {
+  color: var(--star-gold);
 }
 
 /* —— 回收站 —— */
