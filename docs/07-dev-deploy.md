@@ -2,142 +2,80 @@
 
 ## 1. 环境要求
 
-- Node.js **≥ 22.5**（依赖内置 `node:sqlite`，Node 24+ 该模块已稳定）
-- npm ≥ 10
-- 无需 C++ 编译工具链，无需 Docker，无需外部数据库
+- Node.js **≥ 22.5**(推荐 24 LTS)
+- pnpm ≥ 10
+- PostgreSQL ≥ 13 —— 本地开发无需安装:项目内置 embedded-postgres(`pnpm db:start` 自动下载并启动)
 
-检查：
-```bash
-node -v
-npm -v
-```
-
-## 2. 首次启动
+## 2. 首次启动(本地开发)
 
 ```bash
-cd D:\Project\Bookmark-Pool
-npm install          # 根目录安装，workspaces 会一并装 server 与 web
-npm run dev          # 同时启动后端(3001) 与前端(5178)
+git clone https://github.com/anyaoqi/YunQian.git
+cd YunQian
+pnpm install
+
+pnpm db:start        # 终端 1:启动本地 PostgreSQL,连接串自动写入 app/.env.local
+pnpm dev             # 终端 2:启动 Next.js 开发服务器
 ```
 
-打开 <http://localhost:5178>。数据库文件在首次启动时自动创建于 `server/data/yunqian.db`。
+打开 <http://127.0.0.1:3000>。首次启动自动建表并初始化管理员 `admin`(开发环境密码 `admin123`)。
 
-## 3. 脚本一览
+**旧版 SQLite 数据迁移**:把 `yunqian.db` 放到 `app/data/` 下再首次启动,存量用户/书签/分类/标签会自动迁入 PostgreSQL(原文件保留为备份,不会删除)。
+
+## 3. 脚本一览(在仓库根目录执行)
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run dev` | 并行启动后端 (tsx watch) 与前端 (vite) |
-| `npm run dev:server` / `dev:web` | 单独启动某一端 |
-| `npm run build` | 编译后端到 `server/dist`，构建前端到 `web/dist` |
-| `npm start` | 生产模式：跑编译后的后端，并托管 `web/dist` 静态资源（单端口 3001） |
-| `npm run typecheck` | 前后端 TypeScript 检查 |
-| `npm run clean` | 删除构建产物 |
+| `pnpm dev` | 启动 Next.js 开发服务器 (3000) |
+| `pnpm db:start` | 启动本地开发 PostgreSQL(端口 5433,数据在 `app/.pgdata/`) |
+| `pnpm db:reset` | 删除本地开发数据库 |
+| `pnpm build` / `pnpm start` | 生产构建 / 启动 |
+| `pnpm typecheck` | TypeScript 检查 |
+| `pnpm clean` | 清理构建产物 |
 
 ## 4. 环境变量
 
-| 变量 | 默认 | 说明 |
+| 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `PORT` | `3001` | 后端端口 |
-| `HOST` | `127.0.0.1` | 监听地址。**改成 `0.0.0.0` 等于把无认证的数据库暴露给同网段** |
-| `DB_PATH` | `server/data/yunqian.db` | 数据库文件路径 |
-| `WEB_DIST` | `web/dist` | 生产模式静态资源目录 |
-| `DISABLE_FETCH_TITLE` | 未设置 | 设为 `1` 关闭服务端抓取标题（消除 SSRF 面） |
+| `DATABASE_URL` | ✅ | PostgreSQL 连接串,如 `postgres://user:pass@host:5432/db` |
+| `JWT_SECRET` | ✅(生产) | JWT 签名密钥,≥ 32 字符。生产缺失会拒绝启动。生成:`node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"` |
+| `INITIAL_ADMIN_PASSWORD` | – | 首次初始化 admin 的密码(≥ 8 位)。生产未配置时自动生成随机密码,仅在启动日志打印一次 |
+| `ALLOW_REGISTRATION` | – | `false` 关闭公开注册 |
+| `DB_PATH` | – | 旧 SQLite 文件路径,仅用于自动迁移(默认 `/data/yunqian.db`,本地为 `app/data/yunqian.db`) |
+| `DISABLE_FETCH_TITLE` | – | `1` 关闭服务端抓取标题 |
+| `PORT` | – | 监听端口,默认 3000 |
 
-Windows PowerShell 临时设置：
-```powershell
-$env:PORT=4000; npm run dev:server
-```
+## 5. Railway 生产部署(当前方案)
 
-## 5. 目录与数据
+项目通过根目录 `Dockerfile` + `railway.toml` 部署在 Railway,健康检查 `/api/health`(含数据库探活)。
 
-```
-server/data/yunqian.db        # 主数据库
-server/data/yunqian.db-wal    # WAL 日志（正常现象）
-server/data/yunqian.db-shm    # 共享内存索引
-```
+**首次部署 / 从 SQLite 版本升级的步骤:**
 
-三个文件都已在 `.gitignore` 中排除。
+1. **添加 PostgreSQL 数据库**:Railway 项目页 → `New` → `Database` → `PostgreSQL`(与应用服务同区域)。
+2. **给应用服务配置环境变量**(Variables 标签):
+   - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`(引用插件变量)
+   - `JWT_SECRET` = 随机生成(见上表)
+   - `INITIAL_ADMIN_PASSWORD` = 自定义(可选,不配则随机生成)
+3. **保留旧数据卷**:如果旧 SQLite 版本挂载了 Volume(`/data`),**先不要删**——首次启动会自动把 `/data/yunqian.db` 的存量数据迁入 PostgreSQL,日志出现 `迁移完成` 后即可安全删除该 Volume。
+4. 部署完成后确认 Deployments 日志无报错,`/api/health` 返回 `{"ok":true,"db":"up"}`。
 
-## 6. 备份与恢复
+**回滚**:Railway 支持一键回退到任意历史部署;数据库层面,PostgreSQL 插件自带自动备份。
 
-**逻辑备份（推荐，跨版本安全）**
-```bash
-curl -o yunqian-backup.json http://127.0.0.1:3001/api/export
-```
+**扩容与备份**:PostgreSQL 插件在插件页可直接配置自动备份(Backup 功能)。应用服务在数据库外置后可安全多副本(限流器目前是进程内的,多副本前需改为 Redis 共享存储)。
 
-**物理备份（热备，无需停机）**
-```bash
-sqlite3 server/data/yunqian.db "VACUUM INTO 'D:/backup/yunqian-20260726.db'"
-```
-没装 sqlite3 CLI 时，停掉服务后直接复制 `.db`、`.db-wal`、`.db-shm` 三个文件。
+## 6. 数据库说明
 
-**恢复**：替换 db 文件重启；或新建库后把导出的 JSON 里的 bookmarks 通过 `POST /api/bookmarks` 回灌（V2 将提供 JSON 导入端点）。
+- Schema 由 `app/lib/server/db/schema.ts` 定义,启动时在 advisory lock 保护下幂等执行(多实例安全)。
+- `users.username/email` 为 CITEXT(大小写不敏感),对应旧版 SQLite 的 `COLLATE NOCASE`。
+- SQLite → PostgreSQL 一次性迁移逻辑在 `app/lib/server/db/migrate.ts`,触发条件:PG 的 users 表为空 且 存在旧 SQLite 文件。
+- 手动备份(JSON 导出,含分类/标签/书签):登录后 `GET /api/export`。
 
-建议：把定期导出的 JSON 放进一个 Git 仓库，天然获得版本历史与异地备份。
-
-## 7. 生产部署（单机）
-
-```bash
-npm ci
-npm run build
-npm start            # 访问 http://127.0.0.1:3001
-```
-
-用 PM2 常驻：
-```bash
-npm i -g pm2
-pm2 start server/dist/index.js --name yunqian --cwd D:\Project\Bookmark-Pool
-pm2 save
-```
-
-Windows 开机自启可用「任务计划程序」调用 `pm2 resurrect`，或用 `nssm` 注册为服务。
-
-### Nginx 反向代理（V3 之后再考虑公网）
-```nginx
-server {
-  listen 443 ssl;
-  server_name links.example.com;
-  location / {
-    proxy_pass http://127.0.0.1:3001;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  }
-}
-```
-> **前置条件**：V1/V2 没有登录功能。公网暴露前必须先做 V3 的用户体系，或至少加 Nginx `auth_basic` + IP 白名单。
-
-### Docker（V3 规划）
-```dockerfile
-FROM node:24-alpine
-WORKDIR /app
-COPY package*.json ./
-COPY server/package.json server/
-COPY web/package.json web/
-RUN npm ci
-COPY . .
-RUN npm run build
-VOLUME /app/server/data
-EXPOSE 3001
-CMD ["node", "server/dist/index.js"]
-```
-
-## 8. 常见问题
+## 7. 常见问题
 
 | 现象 | 原因 / 处理 |
 | --- | --- |
-| `Cannot find module 'node:sqlite'` | Node 版本 < 22.5，升级 Node |
-| 启动打印 `ExperimentalWarning: SQLite is an experimental feature` | Node 22/23 正常提示，可忽略；或加 `--no-warnings=ExperimentalWarning` |
-| 端口被占用 `EADDRINUSE` | 改 `PORT`，或 `netstat -ano \| findstr :3001` 找进程结束掉 |
-| 前端请求 404 | 确认后端已启动；`web/vite.config.ts` 的 `/api` 代理指向 3001 |
-| 导入后集合为空 | 确认导出的是"书签 HTML 文件"而非 JSON；Chrome：书签管理器 → 右上角 ⋮ → 导出书签 |
-| `SQLITE_BUSY` | 多进程同时写同一 db；确保只跑一个后端实例 |
-| 中文乱码 | 确保请求头带 `charset=utf-8`；导入时文件应为 UTF-8 |
-
-## 9. 浏览器书签导出路径速查
-
-| 浏览器 | 操作 |
-| --- | --- |
-| Chrome | `chrome://bookmarks` → ⋮ → 导出书签 |
-| Edge | `edge://favorites` → ⋯ → 导出收藏夹 |
-| Firefox | 书签管理器 (Ctrl+Shift+O) → 导入和备份 → 导出书签为 HTML |
-| Safari | 文件 → 导出 → 书签 |
+| 启动报 `[startup] ...必须配置 JWT_SECRET` | 生产环境缺环境变量,按第 4 节配置 |
+| 启动报 `[db] 缺少 DATABASE_URL` | 未配置数据库连接串,或 Railway 未引用 `${{Postgres.DATABASE_URL}}` |
+| `pnpm db:start` 端口冲突 | `PG_PORT=5434 pnpm db:start` 换端口,并把 `.env.local` 中连接串同步修改 |
+| 登录报 429 `RATE_LIMITED` / `ACCOUNT_LOCKED` | 登录限流触发:每 IP 每分钟 10 次;同账号连续失败 5 次锁定 15 分钟 |
+| 迁移日志 `SQLite 数据迁移失败` | 旧文件损坏或版本过旧;查看日志中具体错误,必要时先修旧库再重启 |
+| 中文乱码 | 确保请求头带 `charset=utf-8`;导入文件应为 UTF-8 |

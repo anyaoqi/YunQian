@@ -1,5 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
-import { getDb, inTransaction, now } from '../db/index';
+import { db, now } from '../db/index';
 import { hashPassword, verifyPassword } from '../lib/crypto';
 import { AppError, notFound } from '../lib/errors';
 import { signJwt } from '../lib/jwt';
@@ -30,8 +29,6 @@ export type LoginInput = {
   password: string;
 };
 
-const DEFAULT_ADMIN_PASSWORD = process.env.INITIAL_ADMIN_PASSWORD || 'admin123';
-
 function toUser(row: UserRow, isDefaultPassword = false): User {
   return {
     id: row.id,
@@ -47,22 +44,19 @@ function toUser(row: UserRow, isDefaultPassword = false): User {
   };
 }
 
-/**
- * 确保默认管理员账户存在。如果 users 表为空，则初始化管理员 admin (id=1)。
- */
-export function ensureAdminUserExists(db: DatabaseSync): void {
-  const admin = db.prepare('SELECT id FROM users WHERE id = 1').get() as { id: number } | undefined;
-  if (!admin) {
-    const timestamp = now();
-    const passwordHash = hashPassword(DEFAULT_ADMIN_PASSWORD);
-    db.prepare(`
-      INSERT INTO users (id, username, email, password_hash, role, nickname, status, created_at, updated_at)
-      VALUES (1, 'admin', NULL, ?, 'admin', '系统管理员', 'active', ?, ?)
-    `).run(passwordHash, timestamp, timestamp);
+/** PostgreSQL 唯一约束冲突(23505)→ 业务友好的 409;按约束名区分用户名/邮箱。 */
+function mapUniqueViolation(error: unknown): never {
+  const pgError = error as { code?: string; constraint?: string };
+  if (pgError?.code === '23505') {
+    if (pgError.constraint === 'idx_users_email') {
+      throw new AppError(409, 'EMAIL_EXISTS', '该邮箱已被绑定');
+    }
+    throw new AppError(409, 'USERNAME_EXISTS', '该用户名已被注册');
   }
+  throw error;
 }
 
-export function registerUser(input: RegisterInput): { user: User; token: string } {
+export async function registerUser(input: RegisterInput): Promise<{ user: User; token: string }> {
   if (process.env.ALLOW_REGISTRATION === 'false') {
     throw new AppError(403, 'REGISTRATION_DISABLED', '系统当前已关闭自由注册');
   }
@@ -70,42 +64,29 @@ export function registerUser(input: RegisterInput): { user: User; token: string 
   const username = input.username.trim();
   const email = input.email?.trim() || null;
   const nickname = input.nickname?.trim() || null;
-
-  const existingName = getDb().prepare('SELECT id FROM users WHERE username = ?').get(username);
-  if (existingName) {
-    throw new AppError(409, 'USERNAME_EXISTS', '该用户名已被注册');
-  }
-
-  if (email) {
-    const existingEmail = getDb().prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (existingEmail) {
-      throw new AppError(409, 'EMAIL_EXISTS', '该邮箱已被绑定');
-    }
-  }
-
   const timestamp = now();
   const passwordHash = hashPassword(input.password);
 
-  const id = inTransaction(() => {
-    const result = getDb().prepare(`
-      INSERT INTO users (username, email, password_hash, role, nickname, status, created_at, updated_at)
-      VALUES (?, ?, ?, 'user', ?, 'active', ?, ?)
-    `).run(username, email, passwordHash, nickname, timestamp, timestamp);
-    return Number(result.lastInsertRowid);
-  });
+  // 唯一性靠数据库约束兜底(避免并发注册时的检查-写入竞态);RETURNING 必然返回一行
+  const row = (await db.get<UserRow>(
+    `INSERT INTO users (username, email, password_hash, role, nickname, status, created_at, updated_at)
+     VALUES (?, ?, ?, 'user', ?, 'active', ?, ?)
+     RETURNING *`,
+    [username, email, passwordHash, nickname, timestamp, timestamp],
+  ).catch(mapUniqueViolation))!;
 
-  const row = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow;
   const user = toUser(row);
   const token = signJwt({ userId: user.id, username: user.username, role: user.role });
 
   return { user, token };
 }
 
-export function loginUser(input: LoginInput): { user: User; token: string } {
+export async function loginUser(input: LoginInput): Promise<{ user: User; token: string }> {
   const account = input.account.trim();
-  const row = getDb().prepare(`
+  // username/email 为 CITEXT,天然大小写不敏感,对应原 SQLite 的 COLLATE NOCASE
+  const row = await db.get<UserRow>(`
     SELECT * FROM users WHERE username = ? OR (email IS NOT NULL AND email = ?)
-  `).get(account, account) as UserRow | undefined;
+  `, [account, account]);
 
   if (!row) {
     throw new AppError(401, 'INVALID_CREDENTIALS', '用户名或密码错误');
@@ -127,15 +108,15 @@ export function loginUser(input: LoginInput): { user: User; token: string } {
   return { user, token };
 }
 
-export function getUserById(id: number): User | null {
-  const row = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
+export async function getUserById(id: number): Promise<User | null> {
+  const row = await db.get<UserRow>('SELECT * FROM users WHERE id = ?', [id]);
   if (!row) return null;
   const isDefaultPassword = row.id === 1 && verifyPassword('admin123', row.password_hash);
   return toUser(row, isDefaultPassword);
 }
 
-export function changePassword(userId: number, oldPassword: string, newPassword: string): void {
-  const row = getDb().prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as { password_hash: string } | undefined;
+export async function changePassword(userId: number, oldPassword: string, newPassword: string): Promise<void> {
+  const row = await db.get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [userId]);
   if (!row) throw notFound('用户');
 
   const isValid = verifyPassword(oldPassword, row.password_hash);
@@ -144,19 +125,19 @@ export function changePassword(userId: number, oldPassword: string, newPassword:
   }
 
   const newHash = hashPassword(newPassword);
-  getDb().prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(newHash, now(), userId);
+  await db.run('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', [newHash, now(), userId]);
 }
 
-export function updateUserProfile(
+export async function updateUserProfile(
   userId: number,
   input: { nickname?: string | null; email?: string | null; avatarUrl?: string | null },
-): User {
-  const current = getDb().prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserRow | undefined;
+): Promise<User> {
+  const current = await db.get<UserRow>('SELECT * FROM users WHERE id = ?', [userId]);
   if (!current) throw notFound('用户');
 
   const email = input.email === undefined ? current.email : input.email?.trim() || null;
   if (email && email !== current.email) {
-    const existing = getDb().prepare('SELECT id FROM users WHERE email = ? AND id <> ?').get(email, userId);
+    const existing = await db.get<{ id: number }>('SELECT id FROM users WHERE email = ? AND id <> ?', [email, userId]);
     if (existing) {
       throw new AppError(409, 'EMAIL_EXISTS', '该邮箱已被其他账户绑定');
     }
@@ -165,9 +146,9 @@ export function updateUserProfile(
   const nickname = input.nickname === undefined ? current.nickname : input.nickname?.trim() || null;
   const avatarUrl = input.avatarUrl === undefined ? current.avatar_url : input.avatarUrl?.trim() || null;
 
-  getDb().prepare(`
+  await db.run(`
     UPDATE users SET nickname = ?, email = ?, avatar_url = ?, updated_at = ? WHERE id = ?
-  `).run(nickname, email, avatarUrl, now(), userId);
+  `, [nickname, email, avatarUrl, now(), userId]);
 
-  return getUserById(userId)!;
+  return (await getUserById(userId))!;
 }

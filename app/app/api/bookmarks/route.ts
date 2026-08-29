@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const user = requireAuth(request);
     const { searchParams } = new URL(request.url);
     const input = bookmarkListSchema.parse(Object.fromEntries(searchParams));
-    return Response.json(listBookmarks(user.id, input));
+    return Response.json(await listBookmarks(user.id, input));
   } catch (error) {
     return handleRouteError(error);
   }
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const user = requireAuth(request);
     const body = await request.json();
     const input = bookmarkCreateSchema.parse(body);
-    const bookmark = createBookmark(user.id, input);
+    const bookmark = await createBookmark(user.id, input);
     return Response.json(bookmark, { status: 201 });
   } catch (error) {
     return handleRouteError(error);

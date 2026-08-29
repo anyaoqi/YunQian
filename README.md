@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A522.5-339933?logo=node.js&logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/Database-SQLite%20(node%3Asqlite)-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" />
   <img src="https://img.shields.io/badge/UI-React%2019-149ECA?logo=react&logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/Framework-Next.js%2015-000000?logo=next.js&logoColor=white" alt="Next.js 15" />
   <img src="https://img.shields.io/badge/Auth-JWT%20%2B%20Cookie-FF6B6B" alt="JWT Auth" />
@@ -47,7 +47,7 @@
 - **完整备份与导出**：一键导出全量 JSON 资产备份，或导出浏览器通用 HTML 书签文件。
 
 ### ⚡ 轻量、零外部编译依赖
-- **内置 SQLite**：全面拥抱 Node.js ≥ 22.5 原生内置 `node:sqlite`（`DatabaseSync`），告别 `node-gyp` 和本地 C++ 编译环境困扰。
+- **托管 PostgreSQL**：数据层基于 PostgreSQL(纯 JS `pg` 驱动,无原生编译依赖),天然支持备份、高可用与横向扩容;旧版 SQLite 数据首次启动自动迁移。
 - **单应用架构**：Next.js 15 App Router 全栈整合，单端口部署即可运行全部前端与 API 服务。
 
 ---
@@ -56,6 +56,7 @@
 
 ### 环境要求
 - **Node.js**：`≥ 22.5.0`（推荐使用 Node 24+ LTS 版本）
+- **PostgreSQL**:`≥ 13`(本地开发用 `pnpm db:start` 一键启动,无需自行安装)
 - **包管理器**：推荐使用 `pnpm`（亦兼容 `npm` / `yarn`）
 
 ### 本地运行
@@ -68,17 +69,23 @@ cd YunQian
 # 2. 安装项目依赖
 pnpm install
 
-# 3. 启动本地开发服务器
+# 3. 启动本地开发数据库(embedded-postgres,免安装免 Docker,连接串自动写入 .env.local)
+pnpm db:start
+
+# 4. 另开一个终端,启动本地开发服务器
 pnpm run dev
 ```
 
 启动完成后，打开浏览器访问：
 👉 **<http://127.0.0.1:3000>**
 
+已有旧版 SQLite 数据?把 `data/yunqian.db` 放回 `app/data/` 下,
+首次启动 `pnpm dev` 时会自动迁移到 PostgreSQL(原文件保留为备份)。
+
 ### 默认账户
 首次启动系统会自动初始化默认管理员账户：
 - **账号**：`admin`
-- **初始密码**：`admin123`
+- **开发环境初始密码**：`admin123`(生产环境用 `INITIAL_ADMIN_PASSWORD` 指定,未指定则生成随机密码并只在启动日志中打印一次)
 *(登录后可在左下角用户菜单中随时修改密码或更新个人资料)*
 
 ---
@@ -89,11 +96,12 @@ pnpm run dev
 
 | 环境变量 | 默认值 | 描述 |
 | :--- | :--- | :--- |
+| `DATABASE_URL` | *(必填)* | PostgreSQL 连接串,如 `postgres://user:pass@host:5432/dbname`。Railway 部署引用 `${{Postgres.DATABASE_URL}}` |
+| `JWT_SECRET` | *(必填)* | JWT 凭证签名密钥,至少 32 个字符,**生产环境缺失将拒绝启动**。生成方式:`node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"` |
 | `PORT` | `3000` | 服务监听端口 |
-| `JWT_SECRET` | *(内置安全缺省值)* | JWT 凭证签名密钥（生产环境建议自定义） |
 | `ALLOW_REGISTRATION` | `true` | 是否允许前台公开注册新用户（`true` / `false`） |
-| `INITIAL_ADMIN_PASSWORD` | `admin123` | 首次初始化管理员账号时的默认登录密码 |
-| `DB_PATH` | `data/yunqian.db` | SQLite 数据库文件存放路径 |
+| `INITIAL_ADMIN_PASSWORD` | *(未配置时随机)* | 首次初始化管理员账号时的登录密码(至少 8 位;生产环境未配置时自动生成随机密码,仅在启动日志打印一次,无固定默认值) |
+| `DB_PATH` | `/data/yunqian.db` | 旧版 SQLite 文件路径,仅用于首次启动时自动迁移存量数据,迁移完成后不再读取 |
 | `DISABLE_FETCH_TITLE` | `0` | 设为 `1` 时禁用添加书签时的外网标题抓取功能 |
 
 ---
@@ -103,6 +111,8 @@ pnpm run dev
 | 脚本命令 | 说明 |
 | :--- | :--- |
 | `pnpm run dev` | 启动开发服务器（默认端口 `3000`） |
+| `pnpm db:start` | 启动本地开发 PostgreSQL(数据落在 `app/.pgdata/`) |
+| `pnpm db:reset` | 删除本地开发数据库,下次 `db:start` 全新初始化 |
 | `pnpm run typecheck` | 执行 TypeScript 全局类型安全检查 |
 | `pnpm run build` | 构建 Next.js 生产版本 |
 | `pnpm run start` | 启动生产环境服务 |

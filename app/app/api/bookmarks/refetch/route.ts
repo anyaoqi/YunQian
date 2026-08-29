@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const user = requireAuth(request);
     const body = await request.json().catch(() => ({}));
     const { limit } = refetchBatchSchema.parse(body);
-    return Response.json(enqueueBatchRefetch(user.id, limit));
+    return Response.json(await enqueueBatchRefetch(user.id, limit));
   } catch (error) {
     return handleRouteError(error);
   }

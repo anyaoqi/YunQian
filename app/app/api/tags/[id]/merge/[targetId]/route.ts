@@ -15,7 +15,7 @@ export async function POST(
     const resolved = await params;
     const { id: sourceId } = idParamSchema.parse({ id: resolved.id });
     const { id: targetId } = idParamSchema.parse({ id: resolved.targetId });
-    return Response.json(mergeTags(user.id, sourceId, targetId));
+    return Response.json(await mergeTags(user.id, sourceId, targetId));
   } catch (error) {
     return handleRouteError(error);
   }

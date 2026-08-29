@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const authUser = requireAuth(request);
     const body = await request.json();
     const input = passwordChangeSchema.parse(body);
-    changePassword(authUser.id, input.oldPassword, input.newPassword);
+    await changePassword(authUser.id, input.oldPassword, input.newPassword);
     return Response.json({ success: true, ok: true }, { status: 200 });
   } catch (error) {
     return handleRouteError(error);

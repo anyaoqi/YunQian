@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const user = requireAuth(request);
-    return Response.json(listTags(user.id));
+    return Response.json(await listTags(user.id));
   } catch (error) {
     return handleRouteError(error);
   }
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const user = requireAuth(request);
     const body = await request.json();
     const input = tagCreateSchema.parse(body);
-    const tag = createTag(user.id, input);
+    const tag = await createTag(user.id, input);
     return Response.json(tag, { status: 201 });
   } catch (error) {
     return handleRouteError(error);

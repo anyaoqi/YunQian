@@ -11,7 +11,7 @@ export async function PATCH(request: Request) {
     const authUser = requireAuth(request);
     const body = await request.json();
     const input = profileUpdateSchema.parse(body);
-    const updatedUser = updateUserProfile(authUser.id, input);
+    const updatedUser = await updateUserProfile(authUser.id, input);
     return Response.json({ user: updatedUser }, { status: 200 });
   } catch (error) {
     return handleRouteError(error);

@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const date = new Date().toISOString().slice(0, 10);
 
     if (format === 'html') {
-      const html = buildHtmlExport(user.id);
+      const html = await buildHtmlExport(user.id);
       return new Response(html, {
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const data = buildExport(user.id);
+    const data = await buildExport(user.id);
     const json = JSON.stringify(data, null, 2);
     return new Response(json, {
       headers: {

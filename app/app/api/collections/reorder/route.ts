@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const user = requireAuth(request);
     const body = await request.json();
     const { parentId, orderedIds } = reorderSchema.parse(body);
-    reorderCollections(user.id, parentId, orderedIds);
+    await reorderCollections(user.id, parentId, orderedIds);
     return Response.json({ ok: true });
   } catch (error) {
     return handleRouteError(error);

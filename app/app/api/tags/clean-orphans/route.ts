@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const user = requireAuth(request);
-    return Response.json(cleanOrphanTags(user.id));
+    return Response.json(await cleanOrphanTags(user.id));
   } catch (error) {
     return handleRouteError(error);
   }

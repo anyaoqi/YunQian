@@ -12,11 +12,11 @@ export async function POST(request: Request) {
     const contentType = request.headers.get('content-type') ?? '';
     if (contentType.includes('text/plain')) {
       const html = await request.text();
-      return Response.json(importNetscapeHtml(user.id, { html, mode: 'skip' }));
+      return Response.json(await importNetscapeHtml(user.id, { html, mode: 'skip' }));
     }
     const body = await request.json();
     const input = importBodySchema.parse(body);
-    return Response.json(importNetscapeHtml(user.id, { html: input.html, collectionId: input.collectionId, mode: input.mode }));
+    return Response.json(await importNetscapeHtml(user.id, { html: input.html, collectionId: input.collectionId, mode: input.mode }));
   } catch (error) {
     return handleRouteError(error);
   }

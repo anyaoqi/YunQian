@@ -10,7 +10,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   try {
     const user = requireAuth(request);
     const { id } = idParamSchema.parse(await params);
-    permanentlyDeleteBookmark(user.id, id);
+    await permanentlyDeleteBookmark(user.id, id);
     return new Response(null, { status: 204 });
   } catch (error) {
     return handleRouteError(error);

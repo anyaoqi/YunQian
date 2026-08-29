@@ -7,20 +7,26 @@
     "dev": "next dev -p 3000",
     "build": "next build && cp -R .next/static .next/standalone/app/.next/ && cp -R public .next/standalone/app/",
     "start": "HOSTNAME=0.0.0.0 node .next/standalone/app/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:start": "node scripts/dev-db.mjs",
+    "db:reset": "node -e \"require('node:fs').rmSync('.pgdata',{recursive:true,force:true});console.log('已删除 .pgdata,下次 db:start 将全新初始化')\""
   },
   "dependencies": {
     "lucide-react": "^1.31.0",
     "motion": "^13.1.0",
     "next": "15.2.0",
+    "pg": "^8.23.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "zod": "3.24.1"
   },
   "devDependencies": {
+    "@embedded-postgres/windows-x64": "18.1.0-beta.15",
     "@types/node": "22.13.1",
+    "@types/pg": "^8.23.1",
     "@types/react": "19.0.3",
     "@types/react-dom": "19.0.2",
+    "embedded-postgres": "18.1.0-beta.15",
     "typescript": "5.7.3"
   }
 }

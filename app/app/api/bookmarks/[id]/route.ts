@@ -10,7 +10,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const user = requireAuth(request);
     const { id } = idParamSchema.parse(await params);
-    return Response.json(getBookmark(user.id, id));
+    return Response.json(await getBookmark(user.id, id));
   } catch (error) {
     return handleRouteError(error);
   }
@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = idParamSchema.parse(await params);
     const body = await request.json();
     const input = bookmarkUpdateSchema.parse(body);
-    return Response.json(updateBookmark(user.id, id, input));
+    return Response.json(await updateBookmark(user.id, id, input));
   } catch (error) {
     return handleRouteError(error);
   }
@@ -32,7 +32,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   try {
     const user = requireAuth(request);
     const { id } = idParamSchema.parse(await params);
-    deleteBookmark(user.id, id);
+    await deleteBookmark(user.id, id);
     return new Response(null, { status: 204 });
   } catch (error) {
     return handleRouteError(error);

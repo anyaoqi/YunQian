@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const user = requireAuth(request);
     const body = await request.json();
     const { ids, tags } = batchTagsSchema.parse(body);
-    return Response.json(batchAddTags(user.id, ids, tags));
+    return Response.json(await batchAddTags(user.id, ids, tags));
   } catch (error) {
     return handleRouteError(error);
   }
