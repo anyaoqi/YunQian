@@ -4,6 +4,12 @@ packages:
 # pnpm 11+: 使用 allowBuilds 映射替代旧版 onlyBuiltDependencies 数组
 # 参考: https://pnpm.io/cli/approve-builds
 allowBuilds:
+  # embedded-postgres 按平台分发二进制包,各自带 postinstall(解压 PG 可执行文件):
+  # 本地 Windows 开发 / Railway Docker 构建(linux-x64) / 其他平台贡献者
   '@embedded-postgres/windows-x64': true
+  '@embedded-postgres/linux-x64': true
+  '@embedded-postgres/linux-arm64': true
+  '@embedded-postgres/darwin-x64': true
+  '@embedded-postgres/darwin-arm64': true
   esbuild: true
   sharp: true
