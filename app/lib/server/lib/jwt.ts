@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { AppError } from './errors';
 
 export type JwtPayload = {
   userId: number;
@@ -8,9 +9,35 @@ export type JwtPayload = {
   iat: number;
 };
 
-const DEFAULT_SECRET = 'yunqian-jwt-secret-key-fallback-change-me-in-production';
-const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_SECRET;
 const DEFAULT_EXPIRATION_SECONDS = 30 * 24 * 60 * 60; // 30 天
+
+const DEV_FALLBACK_SECRET = 'yunqian-dev-only-secret-do-not-use-in-production';
+
+let cachedSecret: string | null = null;
+
+/**
+ * 解析签名密钥。生产环境必须显式配置 JWT_SECRET,否则启动即失败——
+ * 回退到固定字符串等于允许任何人伪造任意用户的登录令牌。
+ * 开发环境允许回退,但每次进程重启随机生成,避免形成可预测密钥。
+ */
+function getSecret(): string {
+  if (cachedSecret) return cachedSecret;
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.length >= 32) {
+    cachedSecret = secret;
+    return cachedSecret;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new AppError(
+      500,
+      'JWT_SECRET_MISSING',
+      '生产环境未配置 JWT_SECRET(至少 32 个字符)。请在环境变量中设置后重新部署。',
+    );
+  }
+  console.warn('[jwt] 未配置 JWT_SECRET,开发环境使用临时密钥,重启后所有登录态将失效。');
+  cachedSecret = `${DEV_FALLBACK_SECRET}:${randomBytes(16).toString('hex')}`;
+  return cachedSecret;
+}
 
 function base64UrlEncode(str: string): string {
   return Buffer.from(str, 'utf8')
@@ -51,7 +78,7 @@ export function signJwt(
   const header = { alg: 'HS256', typ: 'JWT' };
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
   const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
-  const signature = createSignature(`${encodedHeader}.${encodedPayload}`, JWT_SECRET);
+  const signature = createSignature(`${encodedHeader}.${encodedPayload}`, getSecret());
 
   return `${encodedHeader}.${encodedPayload}.${signature}`;
 }
@@ -65,7 +92,7 @@ export function verifyJwt(token: string): JwtPayload | null {
   if (parts.length !== 3) return null;
 
   const [encodedHeader, encodedPayload, signature] = parts;
-  const expectedSignature = createSignature(`${encodedHeader}.${encodedPayload}`, JWT_SECRET);
+  const expectedSignature = createSignature(`${encodedHeader}.${encodedPayload}`, getSecret());
 
   const sigBuf = Buffer.from(signature);
   const expSigBuf = Buffer.from(expectedSignature);
