@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const user = requireAuth(request);
     const body = await request.json();
     const { ids, collectionId } = batchMoveSchema.parse(body);
-    return Response.json(batchMoveBookmarks(user.id, ids, collectionId ?? null));
+    return Response.json(await batchMoveBookmarks(user.id, ids, collectionId ?? null));
   } catch (error) {
     return handleRouteError(error);
   }

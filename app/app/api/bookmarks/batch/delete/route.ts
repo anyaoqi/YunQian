@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const user = requireAuth(request);
     const body = await request.json();
     const { ids } = batchDeleteSchema.parse(body);
-    return Response.json(batchDeleteBookmarks(user.id, ids));
+    return Response.json(await batchDeleteBookmarks(user.id, ids));
   } catch (error) {
     return handleRouteError(error);
   }

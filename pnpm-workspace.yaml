@@ -4,5 +4,6 @@ packages:
 # pnpm 11+: 使用 allowBuilds 映射替代旧版 onlyBuiltDependencies 数组
 # 参考: https://pnpm.io/cli/approve-builds
 allowBuilds:
+  '@embedded-postgres/windows-x64': true
   esbuild: true
   sharp: true

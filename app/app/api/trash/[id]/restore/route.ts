@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const user = requireAuth(request);
     const { id } = idParamSchema.parse(await params);
-    return Response.json(restoreBookmark(user.id, id));
+    return Response.json(await restoreBookmark(user.id, id));
   } catch (error) {
     return handleRouteError(error);
   }

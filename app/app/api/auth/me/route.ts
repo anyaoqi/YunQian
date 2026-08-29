@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     if (!authUser) {
       return Response.json({ user: null }, { status: 200 });
     }
-    const user = getUserById(authUser.id);
+    const user = await getUserById(authUser.id);
     return Response.json({ user });
   } catch (error) {
     return handleRouteError(error);

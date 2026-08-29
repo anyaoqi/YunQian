@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const user = requireAuth(request);
-    return Response.json(listTrashedBookmarks(user.id));
+    return Response.json(await listTrashedBookmarks(user.id));
   } catch (error) {
     return handleRouteError(error);
   }
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const user = requireAuth(request);
-    return Response.json(emptyTrash(user.id));
+    return Response.json(await emptyTrash(user.id));
   } catch (error) {
     return handleRouteError(error);
   }

@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const user = requireAuth(request);
     const { id } = idParamSchema.parse(await params);
-    const clickCount = visitBookmark(user.id, id);
+    const clickCount = await visitBookmark(user.id, id);
     return Response.json({ clickCount });
   } catch (error) {
     return handleRouteError(error);

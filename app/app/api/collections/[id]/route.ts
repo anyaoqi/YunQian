@@ -12,7 +12,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = idParamSchema.parse(await params);
     const body = await request.json();
     const input = collectionUpdateSchema.parse(body);
-    return Response.json(updateCollection(user.id, id, input));
+    return Response.json(await updateCollection(user.id, id, input));
   } catch (error) {
     return handleRouteError(error);
   }
@@ -22,7 +22,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   try {
     const user = requireAuth(request);
     const { id } = idParamSchema.parse(await params);
-    deleteCollection(user.id, id);
+    await deleteCollection(user.id, id);
     return new Response(null, { status: 204 });
   } catch (error) {
     return handleRouteError(error);
