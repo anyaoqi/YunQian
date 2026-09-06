@@ -7,6 +7,7 @@ import { LogIn, KeyRound, User as UserIcon, AlertCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
+import { safeRedirectTarget } from '@/lib/safeRedirect';
 
 export default function LoginPage() {
   return (
@@ -19,7 +20,7 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get('redirect') || '/';
+  const redirectPath = safeRedirectTarget(searchParams.get('redirect'));
   const { login } = useAuth();
 
   const [account, setAccount] = useState('');
@@ -42,7 +43,8 @@ function LoginForm() {
       setSubmitting(true);
       setError('');
       await login({ account: account.trim(), password });
-      router.push(redirectPath);
+      // replace 避免在历史栈留下 /login,防止回退键重新触发登录页回环
+      router.replace(redirectPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败，请检查账号密码');
     } finally {

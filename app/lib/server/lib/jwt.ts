@@ -15,6 +15,14 @@ const DEV_FALLBACK_SECRET = 'yunqian-dev-only-secret-do-not-use-in-production';
 
 let cachedSecret: string | null = null;
 
+declare global {
+  // Next dev 下每个 API Route 会打成独立 bundle,模块级变量互不共享;
+  // 密钥必须挂在同进程共享的 globalThis 上,否则 login 签发的 token 在别的路由验签失败,
+  // 首页并发请求 401 → 跳登录页 → middleware 见 cookie 又弹回首页,形成无限跳转。
+  // eslint-disable-next-line no-var
+  var __yunqianJwtSecret: string | undefined;
+}
+
 /**
  * 解析签名密钥。生产环境必须显式配置 JWT_SECRET,否则启动即失败——
  * 回退到固定字符串等于允许任何人伪造任意用户的登录令牌。
@@ -22,9 +30,14 @@ let cachedSecret: string | null = null;
  */
 function getSecret(): string {
   if (cachedSecret) return cachedSecret;
+  if (globalThis.__yunqianJwtSecret) {
+    cachedSecret = globalThis.__yunqianJwtSecret;
+    return cachedSecret;
+  }
   const secret = process.env.JWT_SECRET;
   if (secret && secret.length >= 32) {
     cachedSecret = secret;
+    globalThis.__yunqianJwtSecret = secret;
     return cachedSecret;
   }
   if (process.env.NODE_ENV === 'production') {
@@ -36,6 +49,7 @@ function getSecret(): string {
   }
   console.warn('[jwt] 未配置 JWT_SECRET,开发环境使用临时密钥,重启后所有登录态将失效。');
   cachedSecret = `${DEV_FALLBACK_SECRET}:${randomBytes(16).toString('hex')}`;
+  globalThis.__yunqianJwtSecret = cachedSecret;
   return cachedSecret;
 }
 
