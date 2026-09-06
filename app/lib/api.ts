@@ -1,11 +1,32 @@
 import type { Bookmark, BookmarkFilters, BookmarkPayload, Collection, ImportResult, PaginatedBookmarks, Stats, Tag, TrashedBookmark, User } from '@/lib/types';
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// 最近一次因 401 触发登录跳转的时间戳,用于熔断「/ ⇄ /login」反复横跳
+let lastAuthRedirectAt = 0;
+
+function isAuthPagePath(pathname: string): boolean {
+  return pathname.startsWith('/login') || pathname.startsWith('/register');
+}
+
+async function request<T>(path: string, init?: RequestInit, options?: { redirectOn401?: boolean }): Promise<T> {
   const response = await fetch(`/api${path}`, init);
   if (!response.ok) {
-    if (response.status === 401) {
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    if (response.status === 401 && options?.redirectOn401 !== false) {
+      if (typeof window !== 'undefined' && !isAuthPagePath(window.location.pathname)) {
+        const now = Date.now();
+        // 先让服务端清除残留的无效 token cookie,否则 middleware 会把 /login 再弹回 /。
+        // 用原生 fetch 避免递归进 request 的 401 逻辑。
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' });
+        } catch {
+          /* 忽略登出清理失败,仍继续跳转 */
+        }
+        if (now - lastAuthRedirectAt < 5000) {
+          // 5 秒内重复 401:不再携带 redirect 参数,直接去裸登录页以彻底断环
+          window.location.href = '/login';
+        } else {
+          lastAuthRedirectAt = now;
+          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        }
       }
     }
     const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
@@ -21,7 +42,8 @@ function json(method: string, body?: unknown): RequestInit {
 
 export const api = {
   // 认证
-  me: () => request<{ user: User | null }>('/auth/me'),
+  // me 由 AuthProvider 自行处理未登录态,不走全局 401 跳转,避免首页并发请求重复触发跳转
+  me: () => request<{ user: User | null }>('/auth/me', undefined, { redirectOn401: false }),
   login: (payload: { account: string; password: string }) => request<{ user: User }>('/auth/login', json('POST', payload)),
   register: (payload: { username: string; password: string; email?: string | null; nickname?: string | null }) => request<{ user: User }>('/auth/register', json('POST', payload)),
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),

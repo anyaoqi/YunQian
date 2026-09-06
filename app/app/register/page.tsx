@@ -7,6 +7,7 @@ import { UserPlus, KeyRound, User as UserIcon, Mail, Smile, AlertCircle } from '
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
+import { safeRedirectTarget } from '@/lib/safeRedirect';
 
 export default function RegisterPage() {
   return (
@@ -19,7 +20,7 @@ export default function RegisterPage() {
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get('redirect') || '/';
+  const redirectPath = safeRedirectTarget(searchParams.get('redirect'));
   const { register } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -54,7 +55,8 @@ function RegisterForm() {
         nickname: nickname.trim() || null,
         email: email.trim() || null,
       });
-      router.push(redirectPath);
+      // replace 避免在历史栈留下 /register,防止回退键重新触发鉴权页回环
+      router.replace(redirectPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败，请重试');
     } finally {
