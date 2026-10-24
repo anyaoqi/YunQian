@@ -11,3 +11,16 @@ app/node_modules
 *.log
 .DS_Store
 docs
+server
+
+# 环境变量与密钥：绝不进镜像（运行时由 compose / 平台注入）
+.env
+.env.*
+!.env.example
+app/.env
+app/.env.*
+!app/.env.example
+
+# 本地开发数据库与构建缓存
+app/.pgdata
+app/tsconfig.tsbuildinfo

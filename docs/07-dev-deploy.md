@@ -44,7 +44,9 @@ pnpm dev             # 终端 2:启动 Next.js 开发服务器
 | `DISABLE_FETCH_TITLE` | – | `1` 关闭服务端抓取标题 |
 | `PORT` | – | 监听端口,默认 3000 |
 
-## 5. Railway 生产部署(当前方案)
+## 5. Railway 生产部署(可选方案)
+
+> 自建服务器(腾讯云轻量等)的单机部署方式见 [`09-deploy-tencent-lightweight.md`](./09-deploy-tencent-lightweight.md),两套方案共用同一个 `Dockerfile`。
 
 项目通过根目录 `Dockerfile` + `railway.toml` 部署在 Railway,健康检查 `/api/health`(含数据库探活)。
 

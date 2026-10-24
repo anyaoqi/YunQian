@@ -1,0 +1,109 @@
+# 云签 YunQian —— 腾讯云轻量应用服务器部署编排
+#
+# 这是**生产部署专用**编排（80 端口经 Caddy 反代）。推荐用法：
+#   bash deploy/install.sh
+# 手动用法：
+#   cd deploy && cp .env.example .env && vi .env
+#   docker compose build && docker compose up -d
+#   curl http://127.0.0.1/api/health   # 期望 {"ok":true,"db":"up"}
+#
+# 详见 deploy/README.md。根目录的 docker-compose.yml 仅供 Railway / 其他场景参考，
+# 不要与本文件混用（两者数据库版本与卷路径不同，混用会导致数据目录无法互相识别）。
+
+name: yunqian
+
+# 统一容器日志轮转，避免日志把磁盘写满
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    # PostgreSQL 18：与本地开发环境（embedded-postgres 18.1.0-beta）保持大版本一致，
+    # 这样本机导出的 SQL / 数据目录迁移不会跨大版本失败。
+    image: postgres:18-alpine
+    container_name: yunqian-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: yunqian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 deploy/.env 中设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: yunqian
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+      # 仅在数据卷首次初始化时生效；UTC+8 场景下统一 UTF8 编码
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      # 【重要】PostgreSQL 18 官方镜像把 PGDATA 改为版本化路径 /var/lib/postgresql/18/docker，
+      # 声明的 VOLUME 也变成了 /var/lib/postgresql。因此必须挂载到父目录，
+      # 让镜像自己使用 18/docker 子目录。
+      # 若挂到 /var/lib/postgresql/data（PG16 时代的写法），entrypoint 守卫会直接让容器退出并报：
+      #   Error: in 18+, these Docker images are configured to store database data in a format
+      #   which is compatible with "pg_ctlcluster"
+      # 不要用显式设置 PGDATA 的方式绕过，会产生路径歧义。
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yunqian -d yunqian"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *default-logging
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: yunqian-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      TZ: Asia/Shanghai
+      # 密码必须只含字母数字（install.sh 生成时已保证），否则 URL 解析会失败
+      DATABASE_URL: postgres://yunqian:${POSTGRES_PASSWORD}@db:5432/yunqian
+      JWT_SECRET: ${JWT_SECRET:?请在 deploy/.env 中设置 JWT_SECRET}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      # 个人自用默认关闭公开注册，账号由 admin 创建/导入
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+    healthcheck:
+      # 镜像内没有 curl，用 Node 自带 fetch 探活
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: yunqian-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      # 无域名阶段只用 80。443 先占位，等配置了域名段（Caddyfile 内注释模板）才会真正监听。
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

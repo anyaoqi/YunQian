@@ -106,6 +106,25 @@ pnpm run dev
 
 ---
 
+## 🚢 生产部署
+
+项目是单端口 Next.js standalone 应用 + PostgreSQL，需要「常驻容器 + 托管数据库」的部署方式，两套方案共用同一个 `Dockerfile`：
+
+| 方案 | 适用场景 | 入口 |
+| :--- | :--- | :--- |
+| **腾讯云轻量服务器（Docker Compose）** | 个人自用、单机长期运行、国内访问 | [`docker-compose.yml`](./docker-compose.yml) + [`docs/09-deploy-tencent-lightweight.md`](./docs/09-deploy-tencent-lightweight.md) |
+| Railway | 不想管服务器、要公网 HTTPS 现成 | [`railway.toml`](./railway.toml) + [`docs/07-dev-deploy.md`](./docs/07-dev-deploy.md) |
+
+轻量服务器三步走：
+
+```bash
+cp .env.example .env        # 填 POSTGRES_PASSWORD / JWT_SECRET / INITIAL_ADMIN_PASSWORD
+docker compose up -d --build
+curl http://127.0.0.1:3000/api/health   # {"ok":true,"db":"up"}
+```
+
+---
+
 ## 📜 常用命令
 
 | 脚本命令 | 说明 |
