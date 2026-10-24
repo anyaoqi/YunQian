@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const authUser = requireAuth(request);
+    const authUser = await requireAuth(request);
     const body = await request.json();
     const input = passwordChangeSchema.parse(body);
     await changePassword(authUser.id, input.oldPassword, input.newPassword);

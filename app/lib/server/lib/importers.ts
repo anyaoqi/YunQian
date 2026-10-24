@@ -6,7 +6,8 @@ import { decodeHtml, type ImportedBookmark } from './html';
  * 这里只取我们关心的字段，忽略未知列。
  */
 export function parseRaindropCsv(csv: string): ImportedBookmark[] {
-  const lines = splitCsvLines(csv);
+  // Excel/编辑器导出常带 UTF-8 BOM,不去掉会导致首列名匹配失败、全部行被静默跳过
+  const lines = splitCsvLines(csv.replace(/^\uFEFF/, ''));
   if (lines.length < 2) return [];
   const header = lines[0].map((cell) => cell.trim().toLowerCase());
   const col = (name: string): number => header.indexOf(name);

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const authUser = getAuthUser(request);
+    const authUser = await getAuthUser(request);
     if (!authUser) {
       // 携带了 token 但校验失败(过期/伪造/密钥轮换):返回 401 并清除 stale cookie,
       // 否则浏览器残留无效 cookie 会导致「/ ⇄ /login」无限互跳。

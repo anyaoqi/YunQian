@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     return Response.json(await getStats(user.id));
   } catch (error) {
     return handleRouteError(error);

@@ -50,6 +50,11 @@ function normalizedTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))];
 }
 
+/** LIKE/ILIKE 通配符转义:用户输入中的 % _ \ 按字面量匹配(PG 默认转义符为反斜杠)。 */
+function escapeLikeTerm(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 /** 必须在事务内调用(tx 为当前事务连接)。 */
 export async function syncBookmarkTags(tx: Db, userId: number, bookmarkId: number, inputTags: string[]): Promise<void> {
   const tags = normalizedTags(inputTags);
@@ -120,8 +125,12 @@ export async function getBookmark(userId: number, id: number): Promise<Bookmark>
 
 export async function createBookmark(userId: number, input: BookmarkInput): Promise<Bookmark> {
   const url = normalizeUrl(input.url);
-  const existing = await db.get<{ id: number }>('SELECT id FROM bookmarks WHERE user_id=? AND url=?', [userId, url]);
-  if (existing) throw new AppError(409, 'DUPLICATE_URL', '该网址已收藏', { id: existing.id });
+  // 查重须覆盖回收站行:UNIQUE(user_id, url) 不区分 deleted_at,
+  // 只查未删行的话,命中回收站同 URL 行的 INSERT 会以 23505 变成 500。
+  const existing = await db.get<{ id: number; deletedAt: string | null }>('SELECT id, deleted_at AS "deletedAt" FROM bookmarks WHERE user_id=? AND url=?', [userId, url]);
+  if (existing) {
+    throw new AppError(409, 'DUPLICATE_URL', existing.deletedAt ? '该网址已在回收站中，可先还原或彻底删除后再添加' : '该网址已收藏', { id: existing.id });
+  }
   await assertCollectionExists(userId, input.collectionId);
   const title = input.title?.trim() || titleFallback(url);
   const timestamp = now();
@@ -143,8 +152,10 @@ export async function updateBookmark(userId: number, id: number, input: Partial<
   if (!current) throw notFound('书签');
   const url = input.url === undefined ? current.url : normalizeUrl(input.url);
   if (url !== current.url) {
-    const duplicate = await db.get<{ id: number }>('SELECT id FROM bookmarks WHERE user_id=? AND url=? AND id<>?', [userId, url, id]);
-    if (duplicate) throw new AppError(409, 'DUPLICATE_URL', '该网址已收藏', { id: duplicate.id });
+    const duplicate = await db.get<{ id: number; deletedAt: string | null }>('SELECT id, deleted_at AS "deletedAt" FROM bookmarks WHERE user_id=? AND url=? AND id<>?', [userId, url, id]);
+    if (duplicate) {
+      throw new AppError(409, 'DUPLICATE_URL', duplicate.deletedAt ? '该网址已在回收站中，可先还原或彻底删除后再添加' : '该网址已收藏', { id: duplicate.id });
+    }
   }
   const collectionId = input.collectionId === undefined ? current.collectionId : input.collectionId;
   await assertCollectionExists(userId, collectionId);
@@ -225,8 +236,9 @@ export async function listBookmarks(userId: number, filters: BookmarkFilters): P
   const conditions = ['b.user_id = ?', 'b.deleted_at IS NULL'];
   const params: (string | number)[] = [userId];
   if (filters.q) {
-    conditions.push('(b.title LIKE ? OR b.url LIKE ? OR COALESCE(b.description, \'\') LIKE ? OR COALESCE(b.note, \'\') LIKE ?)');
-    const value = `%${filters.q}%`;
+    // PG 的 LIKE 区分大小写(SQLite 默认不区分),改用 ILIKE 保持搜索行为一致
+    conditions.push(`(b.title ILIKE ? OR b.url ILIKE ? OR COALESCE(b.description, '') ILIKE ? OR COALESCE(b.note, '') ILIKE ?)`);
+    const value = `%${escapeLikeTerm(filters.q)}%`;
     params.push(value, value, value, value);
   }
   const browseDirect = filters.direct === 'true';
@@ -308,22 +320,31 @@ export async function batchAddTags(userId: number, ids: number[], inputTags: str
   if (tags.length === 0 || ids.length === 0) return { tagsCreated: 0 };
   const timestamp = now();
 
-  // 确保只为属于该 userId 的书签打标签
-  const placeholders = ids.map(() => '?').join(',');
-  const validBookmarks = (await db.all<{ id: number }>(`SELECT id FROM bookmarks WHERE id IN (${placeholders}) AND user_id=? AND deleted_at IS NULL`, [...ids, userId])).map((b) => b.id);
+  // 整体包事务:中途失败时全部回滚,不留「打了半个标签」的半更新状态
+  return inTransaction(async (tx) => {
+    // 确保只为属于该 userId 的书签打标签
+    const placeholders = ids.map(() => '?').join(',');
+    const validBookmarks = (await tx.all<{ id: number }>(`SELECT id FROM bookmarks WHERE id IN (${placeholders}) AND user_id=? AND deleted_at IS NULL`, [...ids, userId])).map((b) => b.id);
+    if (validBookmarks.length === 0) return { tagsCreated: 0 };
+    const bookmarkPlaceholders = validBookmarks.map(() => '?').join(',');
 
-  let tagsCreated = 0;
-  for (const tag of tags) {
-    await db.run('INSERT INTO tags (user_id, name, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING', [userId, tag, timestamp]);
-    const row = await db.get<{ id: number }>('SELECT id FROM tags WHERE user_id=? AND name=?', [userId, tag]);
-    if (row) {
-      for (const id of validBookmarks) {
-        await db.run('INSERT INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [id, row.id]);
+    let tagsCreated = 0;
+    for (const tag of tags) {
+      await tx.run('INSERT INTO tags (user_id, name, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING', [userId, tag, timestamp]);
+      const row = await tx.get<{ id: number }>('SELECT id FROM tags WHERE user_id=? AND name=?', [userId, tag]);
+      if (row) {
+        // 每个标签一条 INSERT...SELECT,替代原先 tag×bookmark 的双层逐条循环
+        await tx.run(
+          `INSERT INTO bookmark_tags (bookmark_id, tag_id)
+           SELECT id, ? FROM bookmarks WHERE id IN (${bookmarkPlaceholders})
+           ON CONFLICT DO NOTHING`,
+          [row.id, ...validBookmarks],
+        );
+        tagsCreated++;
       }
-      tagsCreated++;
     }
-  }
-  return { tagsCreated };
+    return { tagsCreated };
+  });
 }
 
 export async function batchDeleteBookmarks(userId: number, ids: number[]): Promise<{ updated: number }> {

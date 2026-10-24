@@ -11,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; targetId: string }> },
 ) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const resolved = await params;
     const { id: sourceId } = idParamSchema.parse({ id: resolved.id });
     const { id: targetId } = idParamSchema.parse({ id: resolved.targetId });

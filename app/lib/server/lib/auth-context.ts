@@ -1,3 +1,4 @@
+import { db } from '../db/index';
 import { AppError } from './errors';
 import { verifyJwt } from './jwt';
 
@@ -72,16 +73,24 @@ export function extractTokenFromRequest(request: Request): string | null {
   return null;
 }
 
-export function getAuthUser(request: Request): AuthUser | null {
+export async function getAuthUser(request: Request): Promise<AuthUser | null> {
   const token = extractTokenFromRequest(request);
   if (!token) return null;
   const payload = verifyJwt(token);
   if (!payload) return null;
+  // 会话失效校验:改密时 token_version 递增,已签发的旧 token 立即作废;
+  // 被禁用的账户即便持有有效签名也不再放行。
+  const row = await db.get<{ tokenVersion: number; status: string }>(
+    'SELECT token_version AS "tokenVersion", status FROM users WHERE id = ?',
+    [payload.userId],
+  );
+  if (!row || row.status !== 'active') return null;
+  if ((payload.ver ?? 0) !== row.tokenVersion) return null;
   return { id: payload.userId, username: payload.username, role: payload.role };
 }
 
-export function requireAuth(request: Request): AuthUser {
-  const user = getAuthUser(request);
+export async function requireAuth(request: Request): Promise<AuthUser> {
+  const user = await getAuthUser(request);
   if (!user) {
     throw new AppError(401, 'UNAUTHORIZED', '请先登录后再进行操作');
   }

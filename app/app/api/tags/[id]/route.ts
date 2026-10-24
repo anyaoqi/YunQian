@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const { id } = idParamSchema.parse(await params);
     const body = await request.json();
     const input = tagCreateSchema.partial().parse(body);
@@ -20,7 +20,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const { id } = idParamSchema.parse(await params);
     await deleteTag(user.id, id);
     return new Response(null, { status: 204 });

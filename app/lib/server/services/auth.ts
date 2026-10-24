@@ -13,6 +13,7 @@ export type UserRow = {
   nickname: string | null;
   avatar_url: string | null;
   status: 'active' | 'disabled';
+  token_version: number;
   created_at: string;
   updated_at: string;
 };
@@ -76,7 +77,7 @@ export async function registerUser(input: RegisterInput): Promise<{ user: User; 
   ).catch(mapUniqueViolation))!;
 
   const user = toUser(row);
-  const token = signJwt({ userId: user.id, username: user.username, role: user.role });
+  const token = signJwt({ userId: user.id, username: user.username, role: user.role, ver: row.token_version ?? 0 });
 
   return { user, token };
 }
@@ -103,7 +104,7 @@ export async function loginUser(input: LoginInput): Promise<{ user: User; token:
 
   const isDefaultPassword = row.id === 1 && verifyPassword('admin123', row.password_hash);
   const user = toUser(row, isDefaultPassword);
-  const token = signJwt({ userId: user.id, username: user.username, role: user.role });
+  const token = signJwt({ userId: user.id, username: user.username, role: user.role, ver: row.token_version ?? 0 });
 
   return { user, token };
 }
@@ -125,7 +126,8 @@ export async function changePassword(userId: number, oldPassword: string, newPas
   }
 
   const newHash = hashPassword(newPassword);
-  await db.run('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', [newHash, now(), userId]);
+  // 递增 token_version:改密后所有已签发的旧 token(含可能泄露的)立即失效
+  await db.run('UPDATE users SET password_hash = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?', [newHash, now(), userId]);
 }
 
 export async function updateUserProfile(

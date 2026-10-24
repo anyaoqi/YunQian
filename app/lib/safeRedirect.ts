@@ -7,6 +7,8 @@ export function safeRedirectTarget(raw: string | null): string {
   } catch {
     return '/';
   }
+  // 与 middleware 保持一致:先把 `\` 归一化为 `/`,防止 `/\evil.com` 绕过 `//` 检查
+  decoded = decoded.replace(/\\/g, '/');
   if (!decoded.startsWith('/') || decoded.startsWith('//')) return '/';
   if (
     decoded === '/login' ||

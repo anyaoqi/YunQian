@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const { searchParams } = new URL(request.url);
     const input = bookmarkListSchema.parse(Object.fromEntries(searchParams));
     return Response.json(await listBookmarks(user.id, input));
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const body = await request.json();
     const input = bookmarkCreateSchema.parse(body);
     const bookmark = await createBookmark(user.id, input);

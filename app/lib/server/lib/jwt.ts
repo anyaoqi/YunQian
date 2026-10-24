@@ -5,6 +5,8 @@ export type JwtPayload = {
   userId: number;
   username: string;
   role: 'admin' | 'user';
+  /** 会话版本:与 users.token_version 比对,改密/禁用时递增使旧 token 失效。旧 token 无此字段按 0 处理。 */
+  ver?: number;
   exp: number;
   iat: number;
 };
@@ -119,6 +121,9 @@ export function verifyJwt(token: string): JwtPayload | null {
     const now = Math.floor(Date.now() / 1000);
     if (typeof payload.exp === 'number' && payload.exp < now) {
       return null; // 过期
+    }
+    if (payload.ver !== undefined && (typeof payload.ver !== 'number' || !Number.isInteger(payload.ver) || payload.ver < 0)) {
+      return null;
     }
     if (typeof payload.userId !== 'number' || !payload.username) {
       return null;

@@ -28,6 +28,9 @@ function safeRedirectTarget(raw: string | null): string | null {
   } catch {
     return null;
   }
+  // WHATWG 解析器把特殊 scheme 下的 `\` 视同 `/`:不归一化的话,
+  // `/\evil.com` 不会被 `//` 检查命中,却能被 new URL 解析为外部 authority(开放重定向)。
+  decoded = decoded.replace(/\\/g, '/');
   if (!decoded.startsWith('/') || decoded.startsWith('//')) return null;
   if (
     decoded === '/login' ||

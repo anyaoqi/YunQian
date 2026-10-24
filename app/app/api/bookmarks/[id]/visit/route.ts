@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const { id } = idParamSchema.parse(await params);
     const clickCount = await visitBookmark(user.id, id);
     return Response.json({ clickCount });

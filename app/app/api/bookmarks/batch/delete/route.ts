@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const body = await request.json();
     const { ids } = batchDeleteSchema.parse(body);
     return Response.json(await batchDeleteBookmarks(user.id, ids));

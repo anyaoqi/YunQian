@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function PATCH(request: Request) {
   try {
-    const authUser = requireAuth(request);
+    const authUser = await requireAuth(request);
     const body = await request.json();
     const input = profileUpdateSchema.parse(body);
     const updatedUser = await updateUserProfile(authUser.id, input);

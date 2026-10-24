@@ -3,10 +3,16 @@ import type { Db } from '../db/index';
 import { AppError, notFound } from '../lib/errors';
 import type { ImportedBookmark } from '../lib/html';
 import { parseNetscapeBookmarks } from '../lib/html';
+import { parseRaindropCsv, parseTobyJson, parsePocketHtml } from '../lib/importers';
 import { faviconFor, normalizeUrl, titleFallback } from '../lib/url';
 import { syncBookmarkTags } from './bookmarks';
 
+export type ImportFormat = 'netscape' | 'raindrop' | 'toby' | 'pocket';
+
 type ImportOptions = { collectionId?: number | null; mode?: 'skip' | 'overwrite' };
+
+// PostgreSQL btree 索引行上限约 2704 字节,超长 URL 会让 INSERT/整个导入事务报错,直接跳过
+const MAX_IMPORT_URL_LENGTH = 2_048;
 
 async function assertCollection(userId: number, id: number | null | undefined): Promise<void> {
   if (id === null || id === undefined) return;
@@ -32,12 +38,31 @@ async function collectionIdForPath(tx: Db, userId: number, path: string[], rootI
   return parentId;
 }
 
-export async function importNetscapeHtml(userId: number, options: { html: string; collectionId?: number | null; mode?: 'skip' | 'overwrite' }): Promise<{ imported: number; skipped: number; collectionsCreated: number; tagsCreated: number; durationMs: number }> {
-  const html = options.html.trim();
-  if (!/<(?:DL|A|H3)\b/i.test(html)) throw new AppError(400, 'BAD_IMPORT_FILE', '这不是可识别的浏览器书签 HTML 文件');
-  const parsed = parseNetscapeBookmarks(html);
-  if (parsed.length === 0) throw new AppError(400, 'BAD_IMPORT_FILE', '未在文件中找到可导入的 http(s) 书签');
-  return importBookmarks(userId, parsed, { collectionId: options.collectionId, mode: options.mode });
+const EMPTY_IMPORT_MESSAGE: Record<ImportFormat, string> = {
+  netscape: '这不是可识别的浏览器书签 HTML 文件',
+  raindrop: '未在 CSV 中找到可导入的 Raindrop 书签(需包含 url 列)',
+  toby: '未在 JSON 中找到可导入的 Toby 书签(需包含 collections 数组)',
+  pocket: '未在文件中找到可导入的 Pocket 链接',
+};
+
+/**
+ * 导入入口:按 format 分发到对应解析器,再统一走 importBookmarks 写库。
+ * text/plain 直传分支按 Netscape HTML 处理(与浏览器书签导出格式一致)。
+ */
+export async function importBookmarkFile(userId: number, options: { content: string; format: ImportFormat; collectionId?: number | null; mode?: 'skip' | 'overwrite' }): Promise<{ imported: number; skipped: number; collectionsCreated: number; tagsCreated: number; durationMs: number }> {
+  const content = options.content.trim();
+  if (options.format === 'netscape' && !/<(?:DL|A|H3)\b/i.test(content)) {
+    throw new AppError(400, 'BAD_IMPORT_FILE', EMPTY_IMPORT_MESSAGE.netscape);
+  }
+  const entries = options.format === 'raindrop'
+    ? parseRaindropCsv(content)
+    : options.format === 'toby'
+      ? parseTobyJson(content)
+      : options.format === 'pocket'
+        ? parsePocketHtml(content)
+        : parseNetscapeBookmarks(content);
+  if (entries.length === 0) throw new AppError(400, 'BAD_IMPORT_FILE', EMPTY_IMPORT_MESSAGE[options.format]);
+  return importBookmarks(userId, entries, { collectionId: options.collectionId, mode: options.mode });
 }
 
 /** 通用导入：接收已解析的书签条目，写入数据库。供各格式导入器复用。 */
@@ -51,17 +76,22 @@ export async function importBookmarks(userId: number, entries: ImportedBookmark[
     for (const entry of entries) {
       let url: string;
       try { url = normalizeUrl(entry.url); } catch { stats.skipped += 1; continue; }
+      if (url.length > MAX_IMPORT_URL_LENGTH) { stats.skipped += 1; continue; }
+      // 导入文件可能包含任意长度的字段,入库前按业务上限截断,避免撑爆索引或产生不可渲染的数据
+      const title = (entry.title || titleFallback(url)).slice(0, 500);
+      const description = entry.description ? entry.description.slice(0, 20_000) : null;
+      const collectionPath = entry.collectionPath.map((name) => name.slice(0, 100));
       const existing = await tx.get<{ id: number }>('SELECT id FROM bookmarks WHERE user_id=? AND url=?', [userId, url]);
       if (existing && options.mode !== 'overwrite') { stats.skipped += 1; continue; }
-      const collectionId = await collectionIdForPath(tx, userId, entry.collectionPath, options.collectionId ?? null, createdCollections);
-      const tags = [...new Set(entry.tags)];
+      const collectionId = await collectionIdForPath(tx, userId, collectionPath, options.collectionId ?? null, createdCollections);
+      const tags = [...new Set(entry.tags.map((tag) => tag.trim().slice(0, 64)).filter(Boolean))];
       for (const tag of tags) {
         if (!knownTags.has(tag)) { knownTags.add(tag); stats.tagsCreated += 1; }
       }
-      const title = entry.title || titleFallback(url);
       if (existing) {
-        await tx.run(`UPDATE bookmarks SET collection_id=?, title=?, description=?, favicon_url=?, updated_at=? WHERE id=? AND user_id=?`, [
-          collectionId, title, entry.description, faviconFor(url), now(), existing.id, userId,
+        // overwrite 同时清 deleted_at:回收站中的同 URL 行被还原并更新,而不是改一条用户看不到的隐藏行
+        await tx.run(`UPDATE bookmarks SET collection_id=?, title=?, description=?, favicon_url=?, deleted_at=NULL, updated_at=? WHERE id=? AND user_id=?`, [
+          collectionId, title, description, faviconFor(url), now(), existing.id, userId,
         ]);
         await syncBookmarkTags(tx, userId, existing.id, tags);
       } else {
@@ -70,7 +100,7 @@ export async function importBookmarks(userId: number, entries: ImportedBookmark[
           INSERT INTO bookmarks (user_id, collection_id, url, title, description, favicon_url, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           RETURNING id
-        `, [userId, collectionId, url, title, entry.description, faviconFor(url), timestamp, timestamp]);
+        `, [userId, collectionId, url, title, description, faviconFor(url), timestamp, timestamp]);
         await syncBookmarkTags(tx, userId, row!.id, tags);
       }
       stats.imported += 1;

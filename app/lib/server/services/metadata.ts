@@ -1,6 +1,6 @@
 import { db, now } from '../db/index';
 import { notFound } from '../lib/errors';
-import { faviconFor, isSafePublicHttpUrl, normalizeUrl } from '../lib/url';
+import { assertSafePublicHttpUrl, faviconFor, normalizeUrl } from '../lib/url';
 import type { Bookmark } from '../types';
 import { getBookmark } from './bookmarks';
 
@@ -34,7 +34,11 @@ export async function fetchMetadata(rawUrl: string): Promise<MetadataResult> {
     return { title: null, description: null, coverUrl: null, faviconUrl: null };
   }
   const fallback: MetadataResult = { title: null, description: null, coverUrl: null, faviconUrl: faviconFor(url) };
-  if (!isSafePublicHttpUrl(url)) return fallback;
+  try {
+    await assertSafePublicHttpUrl(url);
+  } catch {
+    return fallback;
+  }
   if (process.env.DISABLE_FETCH_TITLE === '1') return fallback;
   try {
     const response = await fetch(url, {
@@ -49,8 +53,14 @@ export async function fetchMetadata(rawUrl: string): Promise<MetadataResult> {
     const description = descriptionMatch ? decodeHtml((descriptionMatch[1] || descriptionMatch[2]).replace(/\s+/g, ' ').trim()).slice(0, 1_000) : null;
     const coverMatch = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']|<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(html);
     let coverUrl = coverMatch ? (coverMatch[1] || coverMatch[2]).trim() : null;
-    if (coverUrl && !/^https?:\/\//i.test(coverUrl)) {
-      try { coverUrl = new URL(coverUrl, url).href; } catch { coverUrl = null; }
+    if (coverUrl) {
+      // 相对地址补全为绝对地址;解析后仍须是 http(s),拦截 javascript: 等协议入库
+      try {
+        const resolved = new URL(coverUrl, url);
+        coverUrl = resolved.protocol === 'http:' || resolved.protocol === 'https:' ? resolved.href : null;
+      } catch {
+        coverUrl = null;
+      }
     }
     return { title: title || null, description, coverUrl, faviconUrl: faviconFor(url) };
   } catch {
@@ -103,6 +113,10 @@ async function processQueue(ids: number[]): Promise<void> {
         const meta = await fetchMetadataWithRetry(row.url);
         await db.run(`UPDATE bookmarks SET description=COALESCE(?, description), cover_url=COALESCE(?, cover_url), favicon_url=?, updated_at=? WHERE id=?`,
           [meta.description, meta.coverUrl, meta.faviconUrl, now(), id]);
+      } catch (error) {
+        // 单条失败(连接抖动/池耗尽)只跳过该条;异常若穿透到 Promise.all,
+        // 未处理的 rejection 会让整个 Node 进程终止。
+        console.error('[metadata] 后台补抓失败 id=%d:', id, error);
       } finally {
         processing.delete(id);
       }
@@ -123,6 +137,6 @@ export async function enqueueBatchRefetch(userId: number, limit = 200): Promise<
   `, [userId, limit]);
   const ids = rows.map((row) => row.id).filter((id) => !processing.has(id));
   for (const id of ids) processing.add(id);
-  if (ids.length > 0) void processQueue(ids);
+  if (ids.length > 0) void processQueue(ids).catch((error) => console.error('[metadata] 后台补抓队列异常:', error));
   return { queued: ids.length };
 }

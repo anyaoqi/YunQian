@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const user = requireAuth(request);
+    const user = await requireAuth(request);
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format') ?? 'json';
     const date = new Date().toISOString().slice(0, 10);
