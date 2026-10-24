@@ -12,6 +12,7 @@ app/data/
 .pnpm-store/
 .impeccable/
 .zcode/
+.workbuddy/
 
 # 本地开发 PostgreSQL(embedded-postgres)数据目录
 app/.pgdata/
