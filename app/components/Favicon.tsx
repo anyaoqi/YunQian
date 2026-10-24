@@ -29,5 +29,5 @@ export function Favicon({ faviconUrl, url }: { faviconUrl: string | null; url: s
   if (index >= candidates.length) {
     return <span className="favicon-fallback">{domain.charAt(0).toUpperCase()}</span>;
   }
-  return <img src={candidates[index]} alt="" onError={() => setIndex((current) => current + 1)} />;
+  return <img src={candidates[index]} alt="" loading="lazy" decoding="async" onError={() => setIndex((current) => current + 1)} />;
 }

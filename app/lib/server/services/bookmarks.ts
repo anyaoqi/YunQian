@@ -50,6 +50,9 @@ function normalizedTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))];
 }
 
+/** all 模式(免分页)的单次返回上限,防止超大书签库拖垮响应 */
+const MAX_LIST_ITEMS = 5_000;
+
 /** LIKE/ILIKE 通配符转义:用户输入中的 % _ \ 按字面量匹配(PG 默认转义符为反斜杠)。 */
 function escapeLikeTerm(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -267,9 +270,10 @@ export async function listBookmarks(userId: number, filters: BookmarkFilters): P
     newest: 'b.created_at DESC', oldest: 'b.created_at ASC', title: 'lower(b.title) ASC', popular: 'b.click_count DESC, b.created_at DESC',
   };
   const total = (await db.get<{ count: number }>(`SELECT COUNT(*) AS count FROM bookmarks b ${where}`, params))!.count;
-  // all 模式(浏览视图整树渲染)跳过分页,一次返回全部结果(PostgreSQL 不支持 LIMIT -1,直接省略)
+  // all 模式(浏览视图整树渲染)跳过分页,但保留硬上限:
+  // 响应还会携带每条书签的标签与分类路径,无上限的全量返回会拖垮内存与 IN 子句查询
   const fetchAll = filters.all === 'true';
-  const limitClause = fetchAll ? '' : ' LIMIT ? OFFSET ?';
+  const limitClause = fetchAll ? ` LIMIT ${MAX_LIST_ITEMS}` : ' LIMIT ? OFFSET ?';
   if (!fetchAll) params.push(filters.pageSize, (filters.page - 1) * filters.pageSize);
   const rows = await db.all<BookmarkRow>(`
     SELECT ${BOOKMARK_COLUMNS}

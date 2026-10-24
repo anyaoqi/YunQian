@@ -63,6 +63,7 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
   const isCollapsed = collapsed.has(collection.id);
   const [dragOver, setDragOver] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const parentKey = String(collection.parentId ?? 'root');
   // 把拖动的分类插入到当前分类之前,得到同层新顺序
   const computeReorder = (draggedId: number): number[] | null => {
     if (draggedId === collection.id) return null;
@@ -83,9 +84,12 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
         setDragOver(false);
         const data = event.dataTransfer.getData('text/plain');
         if (data.startsWith('collection:')) {
-          const draggedId = Number(data.slice('collection:'.length));
+          // 数据格式: collection:<id>:<parentKey>;跨层拖拽无法按同层语义排序,直接忽略(旧实现会发出非法请求报 422)
+          const [, draggedIdPart, draggedParentKey = ''] = data.split(':');
+          const draggedId = Number(draggedIdPart);
+          if (!draggedId || draggedParentKey !== parentKey || !onReorderCollection) return;
           const ordered = computeReorder(draggedId);
-          if (ordered && onReorderCollection) onReorderCollection(collection.parentId, ordered);
+          if (ordered) onReorderCollection(collection.parentId, ordered);
         } else {
           const bookmarkId = Number(data);
           if (bookmarkId && onDropBookmark) onDropBookmark(collection.id, bookmarkId);
@@ -97,7 +101,7 @@ function CollectionItem({ collection, depth, activeId, collapsed, onToggle, onCo
             <ChevronRight />
           </button>
         : <span className="collapse-toggle" aria-hidden />}
-      <button className="tree-main" draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', `collection:${collection.id}`); event.dataTransfer.effectAllowed = 'move'; setDragging(true); }} onDragEnd={() => setDragging(false)} onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} onContextMenu={(event) => { event.preventDefault(); onContextMenu({ x: event.clientX, y: event.clientY, collection }); }} title="点击进入,双击编辑,拖拽排序">
+      <button className="tree-main" draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', `collection:${collection.id}:${parentKey}`); event.dataTransfer.effectAllowed = 'move'; setDragging(true); }} onDragEnd={() => setDragging(false)} onClick={() => onCollection(collection.id)} onDoubleClick={() => onRename(collection)} onContextMenu={(event) => { event.preventDefault(); onContextMenu({ x: event.clientX, y: event.clientY, collection }); }} title="点击进入,双击编辑,拖拽排序">
         <CollectionIcon collection={collection} />
         <span className="tree-name">{collection.name}</span>
         <small>{collection.bookmarkCount}</small>

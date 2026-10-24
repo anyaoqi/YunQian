@@ -50,12 +50,14 @@ export function CommandPalette(props: Props) {
 
   useEffect(() => {
     if (!props.open || !query.trim()) { setBookmarks([]); return; }
+    // active 标志防竞态:快速连续输入时,晚到的旧请求不得覆盖新结果
+    let active = true;
     const timer = window.setTimeout(() => {
       api.bookmarks({ q: query.trim(), sort: 'popular', page: 1, pageSize: 8 })
-        .then((result) => setBookmarks(result.items))
-        .catch(() => setBookmarks([]));
+        .then((result) => { if (active) setBookmarks(result.items); })
+        .catch(() => { if (active) setBookmarks([]); });
     }, 150);
-    return () => window.clearTimeout(timer);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [query, props.open]);
 
   const close = props.onClose;

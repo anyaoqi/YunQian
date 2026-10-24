@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RotateCcw, X, Trash2 } from 'lucide-react';
+import { RotateCcw, X, Trash2, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from './ui/ConfirmDialog';
 import { Favicon, hostOf as domainOf } from './Favicon';
@@ -20,6 +20,7 @@ export function TrashList({ onRestored }: Props) {
   const [items, setItems] = useState<TrashedBookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const confirm = useConfirm();
 
   const load = async () => {
@@ -38,16 +39,21 @@ export function TrashList({ onRestored }: Props) {
   useEffect(() => { void load(); }, []);
 
   const restore = async (bookmark: TrashedBookmark) => {
+    if (busy) return;
+    setBusy(true);
     try {
       await api.restoreBookmark(bookmark.id);
       await load();
       onRestored();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '恢复失败');
+    } finally {
+      setBusy(false);
     }
   };
 
   const remove = async (bookmark: TrashedBookmark) => {
+    if (busy) return;
     const ok = await confirm({
       title: '永久删除?',
       body: <>「<b>{bookmark.title || domainOf(bookmark.url)}</b>」将被永久删除,此操作不可恢复。</>,
@@ -55,16 +61,20 @@ export function TrashList({ onRestored }: Props) {
       danger: true,
     });
     if (!ok) return;
+    setBusy(true);
     try {
       await api.permanentlyDeleteBookmark(bookmark.id);
       await load();
       onRestored();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '删除失败');
+    } finally {
+      setBusy(false);
     }
   };
 
   const empty = async () => {
+    if (busy) return;
     const ok = await confirm({
       title: '清空回收站?',
       body: <>全部 <b>{items.length}</b> 项将被永久删除,不可恢复。</>,
@@ -72,12 +82,15 @@ export function TrashList({ onRestored }: Props) {
       danger: true,
     });
     if (!ok) return;
+    setBusy(true);
     try {
       await api.emptyTrash();
       await load();
       onRestored();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '清空失败');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -86,9 +99,9 @@ export function TrashList({ onRestored }: Props) {
   return <div className="trash-view">
     <div className="trash-head">
       <h1>回收站</h1>
-      {items.length > 0 && <button className="button danger" onClick={empty}><Trash2 aria-hidden />清空回收站</button>}
+      {items.length > 0 && <button className="button danger" onClick={empty} disabled={busy}><Trash2 aria-hidden />清空回收站</button>}
     </div>
-    {error && <div className="error-banner"><X aria-hidden />{error}<button className="icon-btn" onClick={() => setError('')} aria-label="关闭错误"><X /></button></div>}
+    {error && <div className="error-banner"><AlertCircle aria-hidden />{error}<button className="icon-btn" onClick={() => setError('')} aria-label="关闭错误"><X /></button></div>}
     {items.length === 0
       ? <div className="content-state empty-state"><div className="empty-mark"><Trash2 aria-hidden /></div><h2>回收站是空的</h2><p>删除的书签会在这里保留 30 天。</p></div>
       : <div className="bookmark-list">
@@ -106,8 +119,8 @@ export function TrashList({ onRestored }: Props) {
               </div>
             </div>
             <div className="bookmark-actions">
-              <button className="icon-btn trash-restore-btn" onClick={() => restore(bookmark)} title="恢复" aria-label="恢复"><RotateCcw /></button>
-              <button className="icon-btn danger" onClick={() => remove(bookmark)} title="永久删除" aria-label="永久删除"><X /></button>
+              <button className="icon-btn trash-restore-btn" onClick={() => restore(bookmark)} title="恢复" aria-label="恢复" disabled={busy}><RotateCcw /></button>
+              <button className="icon-btn danger" onClick={() => remove(bookmark)} title="永久删除" aria-label="永久删除" disabled={busy}><X /></button>
             </div>
           </article>)}
         </div>}

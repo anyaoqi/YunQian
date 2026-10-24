@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Telescope, ArrowUpRight } from 'lucide-react';
+import { Telescope, ArrowUpRight, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Favicon, hostOf as domainOf } from './Favicon';
 import type { Bookmark } from '@/lib/types';
@@ -29,11 +29,14 @@ export function HomePanel({ onVisit, onAdd, onImport }: Props) {
   const [popular, setPopular] = useState<Bookmark[]>([]);
   const [recent, setRecent] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setLoadError('');
     Promise.all([
       api.bookmarks({ sort: 'popular', page: 1, pageSize: 12 }),
       api.bookmarks({ sort: 'newest', page: 1, pageSize: 8 }),
@@ -42,11 +45,25 @@ export function HomePanel({ onVisit, onAdd, onImport }: Props) {
       setPopular(pop.items);
       setRecent(rec.items);
       setLoading(false);
-    }).catch(() => { if (active) setLoading(false); });
+    }).catch((reason) => {
+      // 加载失败要显式提示,不能伪装成「空数据」误导用户以为书签丢了
+      if (!active) return;
+      setLoadError(reason instanceof Error ? reason.message : '星图加载失败');
+      setLoading(false);
+    });
     return () => { active = false; };
-  }, []);
+  }, [retryKey]);
 
   if (loading) return <div className="content-state"><span className="loader" />正在绘制星图…</div>;
+
+  if (loadError) return <div className="content-state empty-state">
+    <div className="empty-mark"><AlertCircle aria-hidden /></div>
+    <h2>星图暂时无法加载</h2>
+    <p>{loadError}</p>
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+      <button type="button" className="button primary" onClick={() => setRetryKey((value) => value + 1)}>重试</button>
+    </div>
+  </div>;
 
   if (popular.length === 0 && recent.length === 0) return <div className="content-state empty-state">
     <div className="empty-mark"><Telescope aria-hidden /></div>

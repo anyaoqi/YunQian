@@ -12,6 +12,7 @@ type Props = {
   favoriteMode: boolean;
   loading: boolean;
   selectedIds: Set<number>;
+  query?: string;
   onEdit: (bookmark: Bookmark) => void;
   onDelete: (bookmark: Bookmark) => void;
   onFavorite: (bookmark: Bookmark) => void;
@@ -37,16 +38,17 @@ function relativeDate(value: string): string {
 
 
 export function BookmarkList(props: Props) {
-  const { bookmarks, categories, browsing, favoriteMode, loading, onEdit, onDelete, onFavorite, onRefetch, onVisit, onTag, onAdd, onImport, selectedIds, onToggleSelect } = props;
+  const { bookmarks, categories, browsing, favoriteMode, loading, onEdit, onDelete, onFavorite, onRefetch, onVisit, onTag, onAdd, onImport, selectedIds, onToggleSelect, query } = props;
   if (loading) return <div className="content-state"><span className="loader" />正在加载…</div>;
   if (bookmarks.length === 0 && categories.length === 0) return <div className="content-state empty-state">
     <div className="empty-mark"><Telescope aria-hidden /></div>
-    <h2>这里还没有内容</h2>
-    <p>添加一个常用网址,或导入浏览器已有的收藏。</p>
-    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+    {query
+      ? <><h2>没有匹配「{query}」的书签</h2><p>换个关键词试试,或清空搜索返回层级浏览。</p></>
+      : <><h2>这里还没有内容</h2><p>添加一个常用网址,或导入浏览器已有的收藏。</p></>}
+    {!query && <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
       <button type="button" className="button primary" onClick={onAdd}>添加书签</button>
       <button type="button" className="button secondary" onClick={onImport}>导入</button>
-    </div>
+    </div>}
   </div>;
   return <div className="content-stack">
     {categories.length > 0 && (

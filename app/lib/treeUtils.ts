@@ -40,3 +40,26 @@ export function subtreeBookmarks(category: Collection, items: Bookmark[]): Bookm
   const ids = collectSubtreeIds(category);
   return items.filter((bookmark) => bookmark.collectionId !== null && ids.has(bookmark.collectionId));
 }
+
+/** 一次性建立 collectionId → 书签 的索引,供多区块各取子树,避免每区块全量 filter */
+export function buildCollectionIndex(items: Bookmark[]): Map<number, Bookmark[]> {
+  const index = new Map<number, Bookmark[]>();
+  for (const bookmark of items) {
+    if (bookmark.collectionId === null) continue;
+    const bucket = index.get(bookmark.collectionId);
+    if (bucket) bucket.push(bookmark);
+    else index.set(bookmark.collectionId, [bookmark]);
+  }
+  return index;
+}
+
+/** 基于索引取分类子树书签:代价 O(子树大小) 而非 O(子树数 × 全库书签数) */
+export function subtreeBookmarksFromIndex(category: Collection, index: Map<number, Bookmark[]>): Bookmark[] {
+  const ids = collectSubtreeIds(category);
+  const result: Bookmark[] = [];
+  for (const id of ids) {
+    const bucket = index.get(id);
+    if (bucket) result.push(...bucket);
+  }
+  return result;
+}

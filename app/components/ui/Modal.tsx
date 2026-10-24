@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { X } from 'lucide-react';
@@ -15,8 +15,11 @@ type ModalProps = {
 
 const EASE = [0.2, 0, 0, 1] as const;
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ open, onClose, children, className, label }: ModalProps) {
   const [mounted, setMounted] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -34,7 +37,34 @@ export function Modal({ open, onClose, children, className, label }: ModalProps)
     };
   }, [open, onClose]);
 
+  // 焦点管理:打开时移入对话框(子元素 autoFocus 优先生效),关闭时归还原焦点;Tab 循环圈闭在对话框内
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.contains(document.activeElement)) dialog.focus();
+    return () => { previouslyFocused?.focus?.(); };
+  }, [open]);
+
   if (!mounted) return null;
+
+  const trapTabKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE))
+      .filter((el) => el.offsetParent !== null || el === document.activeElement);
+    if (focusables.length === 0) { event.preventDefault(); return; }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   const content = (
     <AnimatePresence>
@@ -49,10 +79,13 @@ export function Modal({ open, onClose, children, className, label }: ModalProps)
           onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
         >
           <motion.div
+            ref={dialogRef}
             className={`modal ${className ?? ''}`}
             role="dialog"
             aria-modal="true"
             aria-label={label}
+            tabIndex={-1}
+            onKeyDown={trapTabKey}
             initial={{ opacity: 0, scale: 0.98, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 6 }}

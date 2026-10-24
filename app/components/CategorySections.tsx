@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Folder, CircleDashed, ChevronRight, Star, RefreshCw, Pencil, X, Plus, Telescope } from 'lucide-react';
 import type { Bookmark, Collection } from '@/lib/types';
-import { pruneByFavorites, subtreeBookmarks, subtreeTotal } from '@/lib/treeUtils';
+import { buildCollectionIndex, pruneByFavorites, subtreeBookmarksFromIndex, subtreeTotal } from '@/lib/treeUtils';
 import { Favicon, hostOf as domainOf } from './Favicon';
 
 type CardCallbacks = {
@@ -34,7 +34,7 @@ type Props = CardCallbacks & {
 };
 
 /** 紧凑导航卡:favicon + 标题 + 一句描述,整卡访问,hover 浮现管理操作 */
-function NavCard({ bookmark, selectedIds, onEdit, onDelete, onFavorite, onRefetch, onVisit, onToggleSelect }: { bookmark: Bookmark } & CardCallbacks) {
+const NavCard = memo(function NavCard({ bookmark, selectedIds, onEdit, onDelete, onFavorite, onRefetch, onVisit, onToggleSelect }: { bookmark: Bookmark } & CardCallbacks) {
   const title = bookmark.title || domainOf(bookmark.url);
   const summary = bookmark.description || bookmark.note || domainOf(bookmark.url);
   const selected = selectedIds.has(bookmark.id);
@@ -59,7 +59,7 @@ function NavCard({ bookmark, selectedIds, onEdit, onDelete, onFavorite, onRefetc
       <button className="icon-btn danger" onClick={() => onDelete(bookmark)} title="删除" aria-label="删除"><X /></button>
     </div>
   </article>;
-}
+});
 
 function NavGrid({ bookmarks, ...callbacks }: { bookmarks: Bookmark[] } & CardCallbacks) {
   return <div className="nav-grid">
@@ -83,7 +83,7 @@ function DirectSection({ title, bookmarks, ...callbacks }: { title: string; book
 
 type SectionProps = CardCallbacks & {
   category: Collection;
-  items: Bookmark[];
+  index: Map<number, Bookmark[]>;
   chip?: number | 'all';
   favoriteMode: boolean;
   onChipChange: (value: number | 'all') => void;
@@ -96,13 +96,16 @@ type SectionProps = CardCallbacks & {
 
 /** 一个子分类区块:头部(下钻+管理) + 横向子导航 chips + 书签网格 */
 function CategorySection(props: SectionProps) {
-  const { category, items, chip, favoriteMode, onChipChange, onOpenCategory, onCreateCategory, onRenameCategory, onDeleteCategory, onDropBookmark, ...callbacks } = props;
+  const { category, index, chip, favoriteMode, onChipChange, onOpenCategory, onCreateCategory, onRenameCategory, onDeleteCategory, onDropBookmark, ...callbacks } = props;
   const [dragOver, setDragOver] = useState(false);
   const children = category.children;
   const total = subtreeTotal(category, favoriteMode);
   const selectedChild = typeof chip === 'number' ? children.find((child) => child.id === chip) : undefined;
   // 「全部」= 该分类子树全部书签;选中子 chip = 该子分类子树全部书签,均保持服务端排序
-  const shown = selectedChild ? subtreeBookmarks(selectedChild, items) : subtreeBookmarks(category, items);
+  const shown = useMemo(
+    () => subtreeBookmarksFromIndex(selectedChild ?? category, index),
+    [selectedChild, category, index],
+  );
   return <section className="cat-section">
     <header
       className={`cat-section-head ${dragOver ? 'drag-over' : ''}`}
@@ -161,6 +164,8 @@ export function CategorySections(props: Props) {
   // 每个区块选中的子导航 chip,切换 scope 后重置为「全部」
   const [chipSelection, setChipSelection] = useState<Record<number, number | 'all'>>({});
   useEffect(() => { setChipSelection({}); }, [scopeKey]);
+  // 一次构建 collectionId → 书签 索引,各区块共享,替代每区块对全库的重复过滤
+  const index = useMemo(() => buildCollectionIndex(items), [items]);
 
   if (loading) return <div className="content-state"><span className="loader" />正在加载…</div>;
   const visible = favoriteMode ? pruneByFavorites(categories) : categories;
@@ -180,7 +185,7 @@ export function CategorySections(props: Props) {
     {visible.map((category) => <CategorySection
       key={category.id}
       category={category}
-      items={items}
+      index={index}
       chip={chipSelection[category.id]}
       favoriteMode={favoriteMode}
       onChipChange={(value) => setChipSelection((old) => ({ ...old, [category.id]: value }))}

@@ -87,17 +87,29 @@ function AppInner() {
   const [tagManageOpen, setTagManageOpen] = useState(false);
   const [collectionDialog, setCollectionDialog] = useState<{ collection: Collection | null; parentId: number | null } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchTimerRef = useRef<number | null>(null);
+  const skipSearchEffectRef = useRef(false);
+  const taxonomyRequestId = useRef(0);
   const confirm = useConfirm();
   const toast = useToast();
   const { user } = useAuth();
 
+  const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
+
   const refreshTaxonomy = useCallback(async () => {
+    // 序号防竞态:连续刷新时,晚到的旧响应不得覆盖新数据
+    const requestId = ++taxonomyRequestId.current;
     try {
       const [nextCollections, nextTags, nextStats] = await Promise.all([api.collections(), api.tags(), api.stats()]);
+      if (requestId !== taxonomyRequestId.current) return;
       setCollections(nextCollections); setTags(nextTags); setStats(nextStats);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '无法加载侧边栏数据'); }
+    } catch (reason) {
+      if (requestId !== taxonomyRequestId.current) return;
+      setError(reason instanceof Error ? reason.message : '无法加载侧边栏数据');
+    }
   }, []);
 
   useEffect(() => { void refreshTaxonomy(); }, [refreshTaxonomy, refreshKey]);
@@ -119,8 +131,9 @@ function AppInner() {
   }, [filters.collectionId, filters.tag, filters.favorite, filters.sort, filters.direct]);
   useEffect(() => { try { localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? '1' : '0'); } catch { /* 忽略 */ } }, [sidebarCollapsed]);
   useEffect(() => {
-    const timer = window.setTimeout(() => setFilters((old) => ({ ...old, q: searchText || undefined, direct: searchText ? undefined : 'true', page: 1 })), 300);
-    return () => window.clearTimeout(timer);
+    if (skipSearchEffectRef.current) { skipSearchEffectRef.current = false; return; }
+    searchTimerRef.current = window.setTimeout(() => setFilters((old) => ({ ...old, q: searchText || undefined, direct: searchText ? undefined : 'true', page: 1 })), 300);
+    return () => { if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current); };
   }, [searchText]);
   const browsing = filters.direct === 'true';
   // 浏览模式(分区视图)一次拉取当前 scope 子树全部书签;搜索/标签筛选仍走分页
@@ -145,6 +158,8 @@ function AppInner() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        // 有模态框打开时不再唤起:面板层级低于 Modal,会变成看不见却抢焦点的悬浮层
+        if (document.querySelector('.modal-backdrop')) return;
         event.preventDefault();
         setPaletteOpen((open) => !open);
       }
@@ -153,8 +168,15 @@ function AppInner() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const updateFilters = (patch: Partial<BookmarkFilters>) => setFilters((old) => ({ ...old, ...patch, page: patch.page ?? 1 }));
-  const refresh = () => setRefreshKey((value) => value + 1);
+  const updateFilters = useCallback((patch: Partial<BookmarkFilters>) => setFilters((old) => ({ ...old, ...patch, page: patch.page ?? 1 })), []);
+  // 统一筛选入口:切换视图总是清空搜索词并取消未触发的防抖,
+  // 否则 300ms 后旧关键词的防抖回调会把刚设置的筛选又改回去
+  const navigate = (patch: Partial<BookmarkFilters>) => {
+    if (searchTimerRef.current !== null) { window.clearTimeout(searchTimerRef.current); searchTimerRef.current = null; }
+    if (searchText !== '') { skipSearchEffectRef.current = true; setSearchText(''); }
+    setMobileNavOpen(false);
+    updateFilters(patch);
+  };
   const favoriteMode = filters.favorite === 'true';
   // 是否处于根级首页(无任何筛选),用于决定是否可显示导航面板
   const atRoot = !filters.collectionId && !filters.tag && !filters.favorite && !filters.q && !trashMode;
@@ -180,8 +202,8 @@ function AppInner() {
     if (filters.tag) return `#${filters.tag}`;
     return breadcrumbTrail.at(-1)?.name ?? rootLabel;
   }, [filters.q, filters.tag, breadcrumbTrail, rootLabel]);
-  const openNewBookmark = () => { setEditingBookmark(null); setBookmarkDialog(true); };
-  const openEditBookmark = (bookmark: Bookmark) => { setEditingBookmark(bookmark); setBookmarkDialog(true); };
+  const openNewBookmark = useCallback(() => { setEditingBookmark(null); setBookmarkDialog(true); }, []);
+  const openEditBookmark = useCallback((bookmark: Bookmark) => { setEditingBookmark(bookmark); setBookmarkDialog(true); }, []);
   const savedBookmark = () => { setBookmarkDialog(false); refresh(); };
 
   const createCollection = (parentId: number | null) => setCollectionDialog({ collection: null, parentId });
@@ -214,7 +236,7 @@ function AppInner() {
     try { await api.deleteTag(tag.id); if (filters.tag === tag.name) updateFilters({ tag: undefined }); refresh(); toast.push('success', '标签已删除'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '删除标签失败'); }
   };
-  const removeBookmark = async (bookmark: Bookmark) => {
+  const removeBookmark = useCallback(async (bookmark: Bookmark) => {
     const ok = await confirm({
       title: '移入回收站?',
       body: <>「<b>{bookmark.title || bookmark.url}</b>」将在回收站保留 30 天。</>,
@@ -224,18 +246,18 @@ function AppInner() {
     if (!ok) return;
     try { await api.deleteBookmark(bookmark.id); refresh(); toast.push('success', '已移入回收站'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '删除书签失败'); }
-  };
-  const toggleFavorite = async (bookmark: Bookmark) => {
+  }, [confirm, toast, refresh]);
+  const toggleFavorite = useCallback(async (bookmark: Bookmark) => {
     try { await api.updateBookmark(bookmark.id, { isFavorite: !bookmark.isFavorite }); refresh(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '更新星标失败'); }
-  };
-  const refetchSingle = async (bookmark: Bookmark) => {
+  }, [refresh]);
+  const refetchSingle = useCallback(async (bookmark: Bookmark) => {
     try {
       const updated = await api.refetchBookmark(bookmark.id);
       setItems((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       toast.push('success', '已重新抓取元数据');
     } catch (reason) { setError(reason instanceof Error ? reason.message : '重新抓取失败'); }
-  };
+  }, [toast]);
 
   const selectedBookmark = useMemo(() => items.find((b) => selectedIds.has(b.id)), [items, selectedIds]);
   useEffect(() => { try { localStorage.setItem(LIST_VIEW_KEY, viewMode); } catch { /* ignore */ } }, [viewMode]);
@@ -247,17 +269,22 @@ function AppInner() {
     onDelete: () => { if (selectedBookmark) removeBookmark(selectedBookmark); },
   });
 
-  const toggleSelect = (id: number) => setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const toggleSelect = useCallback((id: number) => setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }), []);
   const selectAll = () => setSelectedIds(new Set(items.map((b) => b.id)));
-  const clearSelection = () => setSelectedIds(new Set());
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
+  // 失败时抛错给 BatchDialog 就地展示;成功后才清空选择并提示
   const batchMove = async (collectionId: number | null) => {
-    try { await api.batchMoveBookmarks([...selectedIds], collectionId); clearSelection(); refresh(); toast.push('success', '已移动所选书签'); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '批量移动失败'); }
+    const ids = [...selectedIds];
+    try { await api.batchMoveBookmarks(ids, collectionId); }
+    catch (reason) { throw reason instanceof Error ? reason : new Error('批量移动失败'); }
+    clearSelection(); refresh(); toast.push('success', '已移动所选书签');
   };
   const batchAddTags = async (newTags: string[]) => {
-    try { await api.batchAddTags([...selectedIds], newTags); clearSelection(); refresh(); toast.push('success', '已添加标签'); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '批量加标签失败'); }
+    const ids = [...selectedIds];
+    try { await api.batchAddTags(ids, newTags); }
+    catch (reason) { throw reason instanceof Error ? reason : new Error('批量加标签失败'); }
+    clearSelection(); refresh(); toast.push('success', '已添加标签');
   };
   const batchDelete = async () => {
     const ok = await confirm({
@@ -276,15 +303,15 @@ function AppInner() {
   const homeActive = atRoot && viewMode === 'home';
   const viewKey = trashMode ? 'trash' : homeActive ? 'home' : browsing ? 'browse' : viewMode;
 
-  const visit = (bookmark: Bookmark) => { void api.visitBookmark(bookmark.id).catch(() => undefined); };
+  const visit = useCallback((bookmark: Bookmark) => { void api.visitBookmark(bookmark.id).catch(() => undefined); }, []);
 
-  return <div className={`app-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
+  return <div className={`app-shell ${sidebarCollapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'nav-open' : ''}`}>
     <Sidebar collections={collections} tags={tags} stats={stats} collectionId={filters.collectionId} tag={filters.tag} favorite={filters.favorite} trash={trashMode}
       collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-      onCollection={(collectionId) => { exitTrash(); setSearchText(''); updateFilters({ collectionId, q: undefined, tag: undefined, favorite: undefined, direct: 'true' }); }}
-      onTag={(tag) => { exitTrash(); updateFilters({ tag, q: undefined, collectionId: undefined, favorite: undefined, direct: tag ? undefined : 'true' }); }}
-      onFavorite={(favorite) => { exitTrash(); updateFilters({ favorite, q: undefined, collectionId: undefined, tag: undefined, direct: 'true' }); }}
-      onTrash={() => { setTrashMode(true); setSearchText(''); setFilters(defaultFilters); }}
+      onCollection={(collectionId) => { exitTrash(); navigate({ collectionId, q: undefined, tag: undefined, favorite: undefined, direct: 'true' }); }}
+      onTag={(tag) => { exitTrash(); navigate({ tag, q: undefined, collectionId: undefined, favorite: undefined, direct: tag ? undefined : 'true' }); }}
+      onFavorite={(favorite) => { exitTrash(); navigate({ favorite, q: undefined, collectionId: undefined, tag: undefined, direct: 'true' }); }}
+      onTrash={() => { setTrashMode(true); navigate({}); setFilters(defaultFilters); }}
       onCreateCollection={createCollection} onRenameCollection={renameCollection} onDeleteCollection={removeCollection} onDeleteTag={removeTag} onManageTags={() => setTagManageOpen(true)}
       onDropBookmark={async (collectionId, bookmarkId) => {
         try { await api.updateBookmark(bookmarkId, { collectionId }); refresh(); }
@@ -294,11 +321,12 @@ function AppInner() {
         try { await api.reorderCollections(parentId, orderedIds); refresh(); }
         catch (reason) { setError(reason instanceof Error ? reason.message : '排序失败'); }
       }} />
+    {mobileNavOpen && <button type="button" className="nav-backdrop" aria-label="关闭导航" onClick={() => setMobileNavOpen(false)} />}
     <main className="main-content">
       {trashMode
         ? <TrashList onRestored={refresh} />
         : <>
-          <Toolbar query={searchText} sort={filters.sort} view={viewMode} showHomeToggle={atRoot} showViewToggle={!browsing || homeActive} onQueryChange={setSearchText} onSortChange={(sort) => updateFilters({ sort })} onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onOpenPalette={() => setPaletteOpen(true)} onViewChange={setViewMode} searchInputRef={searchInputRef} />
+          <Toolbar query={searchText} sort={filters.sort} view={viewMode} showHomeToggle={atRoot} showViewToggle={!browsing || homeActive} onQueryChange={setSearchText} onSortChange={(sort) => updateFilters({ sort })} onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onOpenPalette={() => setPaletteOpen(true)} onViewChange={setViewMode} searchInputRef={searchInputRef} onToggleSidebar={() => setMobileNavOpen(true)} />
           {!homeActive && <section className="content-header">
             <div>
               <nav className="breadcrumb" aria-label="分类层级">
@@ -307,12 +335,12 @@ function AppInner() {
                   <span className="crumb-sep" aria-hidden>›</span>
                   {index === breadcrumbTrail.length - 1
                     ? <span className="crumb-current">{category.name}</span>
-                    : <button onClick={() => updateFilters({ collectionId: category.id, tag: undefined })}>{category.name}</button>}
+                    : <button onClick={() => navigate({ collectionId: category.id, tag: undefined })}>{category.name}</button>}
                 </span>)}
               </nav>
               <h1>{activeTitle}<span className="header-count">{total} 条</span></h1>
             </div>
-            {(filters.tag || filters.q) && <button className="filter-reset" onClick={() => { setSearchText(''); updateFilters({ tag: undefined, q: undefined, direct: 'true' }); }}><X aria-hidden />返回层级浏览</button>}
+            {(filters.tag || filters.q) && <button className="filter-reset" onClick={() => navigate({ tag: undefined, q: undefined, collectionId: undefined, favorite: undefined, direct: 'true' })}><X aria-hidden />返回层级浏览</button>}
           </section>}
           {error && <div className="error-banner"><AlertCircle aria-hidden />{error}<button className="icon-btn" onClick={() => setError('')} aria-label="关闭错误"><X /></button></div>}
           {user?.isDefaultPassword && (
@@ -349,7 +377,7 @@ function AppInner() {
                     onRefetch={refetchSingle}
                     onVisit={visit}
                     onToggleSelect={toggleSelect}
-                    onOpenCategory={(category) => updateFilters({ collectionId: category.id, tag: undefined, direct: 'true' })}
+                    onOpenCategory={(category) => navigate({ collectionId: category.id, tag: undefined, direct: 'true' })}
                     onCreateCategory={createCollection}
                     onRenameCategory={renameCollection}
                     onDeleteCategory={removeCollection}
@@ -359,17 +387,17 @@ function AppInner() {
                     }}
                   />
                 : viewMode === 'grid'
-                ? <GridView bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds}
+                ? <GridView bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds} query={filters.q}
                     onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite} onRefetch={refetchSingle}
-                    onTag={(tag) => updateFilters({ tag, direct: undefined })}
+                    onTag={(tag) => navigate({ tag, q: undefined, collectionId: undefined, favorite: undefined, direct: undefined })}
                     onVisit={visit}
-                    onOpenCategory={(category) => updateFilters({ collectionId: category.id, tag: undefined, direct: 'true' })}
+                    onOpenCategory={(category) => navigate({ collectionId: category.id, tag: undefined, direct: 'true' })}
                     onToggleSelect={toggleSelect} />
-                : <BookmarkList bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds}
+                : <BookmarkList bookmarks={items} categories={visibleCategories} browsing={browsing} favoriteMode={favoriteMode} loading={loading} selectedIds={selectedIds} query={filters.q}
                     onAdd={openNewBookmark} onImport={() => setImportDialog(true)} onEdit={openEditBookmark} onDelete={removeBookmark} onFavorite={toggleFavorite} onRefetch={refetchSingle}
-                    onTag={(tag) => updateFilters({ tag, direct: undefined })}
+                    onTag={(tag) => navigate({ tag, q: undefined, collectionId: undefined, favorite: undefined, direct: undefined })}
                     onVisit={visit}
-                    onOpenCategory={(category) => updateFilters({ collectionId: category.id, tag: undefined, direct: 'true' })}
+                    onOpenCategory={(category) => navigate({ collectionId: category.id, tag: undefined, direct: 'true' })}
                     onCreateCategory={createCollection} onRenameCategory={renameCollection} onDeleteCategory={removeCollection} onToggleSelect={toggleSelect} />
               }
             </motion.div>
@@ -377,9 +405,9 @@ function AppInner() {
           <BatchActionBar count={selectedIds.size} total={items.length} onMove={() => setBatchDialogMode('move')} onTags={() => setBatchDialogMode('tags')} onDelete={batchDelete} onClear={clearSelection} onSelectAll={selectAll} />
           <BatchDialog open={!!batchDialogMode} mode={batchDialogMode} collections={collections} onClose={() => setBatchDialogMode(null)} onMove={batchMove} onAddTags={batchAddTags} />
           {!loading && !browsing && total > filters.pageSize && <nav className="pagination" aria-label="分页">
-            <button disabled={filters.page <= 1} onClick={() => updateFilters({ page: filters.page - 1 })}><ChevronLeft aria-hidden />上一页</button>
+            <button disabled={filters.page <= 1} onClick={() => { updateFilters({ page: filters.page - 1 }); window.scrollTo(0, 0); }}><ChevronLeft aria-hidden />上一页</button>
             <span className="mono">第 {filters.page} / {pageCount} 页</span>
-            <button disabled={filters.page >= pageCount} onClick={() => updateFilters({ page: filters.page + 1 })}>下一页<ChevronRight aria-hidden /></button>
+            <button disabled={filters.page >= pageCount} onClick={() => { updateFilters({ page: filters.page + 1 }); window.scrollTo(0, 0); }}>下一页<ChevronRight aria-hidden /></button>
           </nav>}
         </>}
     </main>
@@ -393,10 +421,10 @@ function AppInner() {
       onClose={() => setPaletteOpen(false)}
       onAdd={openNewBookmark}
       onImport={() => setImportDialog(true)}
-      onAll={() => { exitTrash(); setSearchText(''); setFilters({ ...defaultFilters }); }}
-      onFavorites={() => { exitTrash(); setSearchText(''); updateFilters({ favorite: 'true', q: undefined, collectionId: undefined, tag: undefined, direct: 'true' }); }}
-      onTrash={() => { setTrashMode(true); setSearchText(''); setFilters(defaultFilters); }}
-      onCollection={(id) => { exitTrash(); setSearchText(''); updateFilters({ collectionId: id, q: undefined, tag: undefined, favorite: undefined, direct: 'true' }); }}
+      onAll={() => { exitTrash(); setFilters({ ...defaultFilters }); }}
+      onFavorites={() => { exitTrash(); navigate({ favorite: 'true', q: undefined, collectionId: undefined, tag: undefined, direct: 'true' }); }}
+      onTrash={() => { setTrashMode(true); setFilters(defaultFilters); }}
+      onCollection={(id) => { exitTrash(); navigate({ collectionId: id, q: undefined, tag: undefined, favorite: undefined, direct: 'true' }); }}
       onVisit={visit}
     />
   </div>;

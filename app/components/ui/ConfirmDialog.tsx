@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { Modal } from './Modal';
 
 export type ConfirmOptions = {
@@ -15,19 +15,20 @@ type PendingConfirm = ConfirmOptions & { resolve: (value: boolean) => void };
 const ConfirmContext = createContext<(options: ConfirmOptions) => Promise<boolean>>(async () => false);
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
-  const [pending, setPending] = useState<PendingConfirm | null>(null);
-  const pendingRef = useRef<PendingConfirm | null>(null);
+  // 队列:并发调用 confirm() 时依次展示,先前的 await 不会因被覆盖而永久挂起
+  const [queue, setQueue] = useState<PendingConfirm[]>([]);
+  const pending = queue[0] ?? null;
 
   const confirm = useCallback((options: ConfirmOptions) => new Promise<boolean>((resolve) => {
-    const item = { ...options, resolve };
-    pendingRef.current = item;
-    setPending(item);
+    setQueue((old) => [...old, { ...options, resolve }]);
   }), []);
 
   const settle = (value: boolean) => {
-    pendingRef.current?.resolve(value);
-    pendingRef.current = null;
-    setPending(null);
+    setQueue((old) => {
+      const [first, ...rest] = old;
+      first?.resolve(value);
+      return rest;
+    });
   };
 
   return (
@@ -38,11 +39,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           <div className="modal-header"><h2>{pending.title}</h2></div>
           {pending.body && <p className="confirm-body">{pending.body}</p>}
           <div className="modal-footer">
-            <button type="button" className="button secondary" onClick={() => settle(false)}>取消</button>
+            {/* 默认焦点放在「取消」上:危险操作不能因手滑 Enter 直接执行 */}
+            <button type="button" className="button secondary" autoFocus onClick={() => settle(false)}>取消</button>
             <button
               type="button"
               className={pending.danger ? 'button danger' : 'button primary'}
-              autoFocus
               onClick={() => settle(true)}
             >
               {pending.confirmText ?? '确认'}

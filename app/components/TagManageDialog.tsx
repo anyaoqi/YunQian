@@ -16,6 +16,7 @@ export function TagManageDialog({ open, tags, onClose, onChanged }: Props) {
   const [mergeTarget, setMergeTarget] = useState<number | ''>('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (editing) { setName(editing.name); setColor(editing.color); setMergeTarget(''); }
@@ -24,20 +25,29 @@ export function TagManageDialog({ open, tags, onClose, onChanged }: Props) {
   if (!open) return null;
 
   const save = async () => {
-    if (!editing) return;
-    try { await api.updateTag(editing.id, { name, color }); onChanged(); setEditing(null); setError(''); }
+    if (!editing || busy) return;
+    const trimmed = name.trim();
+    if (!trimmed) { setError('标签名称不能为空'); return; }
+    setBusy(true);
+    try { await api.updateTag(editing.id, { name: trimmed, color }); onChanged(); setEditing(null); setError(''); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败'); }
+    finally { setBusy(false); }
   };
 
   const merge = async () => {
-    if (!editing || mergeTarget === '') return;
+    if (!editing || mergeTarget === '' || busy) return;
+    setBusy(true);
     try { await api.mergeTags(editing.id, Number(mergeTarget)); onChanged(); setEditing(null); setMergeTarget(''); setError(''); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '合并失败'); }
+    finally { setBusy(false); }
   };
 
   const clean = async () => {
+    if (busy) return;
+    setBusy(true);
     try { const result = await api.cleanOrphanTags(); onChanged(); setError(''); setNotice(`已清理 ${result.deleted} 个空标签`); }
     catch (reason) { setError(reason instanceof Error ? reason.message : '清理失败'); }
+    finally { setBusy(false); }
   };
 
   return <Modal open={open} onClose={onClose} label="标签管理">
@@ -65,16 +75,16 @@ export function TagManageDialog({ open, tags, onClose, onChanged }: Props) {
         </select>
       </div>
       <div className="modal-footer">
-        <button className="button secondary" onClick={() => setEditing(null)}>取消</button>
-        {mergeTarget !== '' && <button className="button primary" onClick={merge}>合并</button>}
-        <button className="button primary" onClick={save}>保存</button>
+        <button className="button secondary" onClick={() => setEditing(null)} disabled={busy}>取消</button>
+        {mergeTarget !== '' && <button className="button primary" onClick={merge} disabled={busy}>合并</button>}
+        <button className="button primary" onClick={save} disabled={busy || !name.trim()}>{busy ? '保存中…' : '保存'}</button>
       </div>
     </div>}
     {error && <p className="form-error">{error}</p>}
     {notice && <p className="form-notice">{notice}</p>}
     <div className="modal-footer">
-      <button className="button secondary" onClick={clean}>清理空标签</button>
-      <button className="button secondary" onClick={onClose}>关闭</button>
+      <button className="button secondary" onClick={clean} disabled={busy}>清理空标签</button>
+      <button className="button secondary" onClick={onClose} disabled={busy}>关闭</button>
     </div>
   </Modal>;
 }

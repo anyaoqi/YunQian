@@ -865,3 +865,82 @@ html[data-theme="dark"] .theme-toggle .theme-icon-moon {
   color: var(--danger);
 }
 
+
+/* ============================================================
+   移动端适配(≤900px):侧栏变为抽屉,工具栏允许换行
+   ============================================================ */
+.toolbar-menu-btn {
+  display: none;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .toolbar-menu-btn {
+    display: inline-grid;
+    place-items: center;
+  }
+
+  /* 侧栏抽屉化:默认移出屏幕,.nav-open 时滑入 */
+  .sidebar {
+    position: fixed;
+    z-index: 1200;
+    inset: 0 auto 0 0;
+    width: min(300px, 86vw);
+    background: var(--bg-page);
+    transform: translateX(-105%);
+    transition: transform var(--dur-base) var(--ease);
+  }
+  .app-shell.collapsed .sidebar {
+    transform: translateX(-105%);
+  }
+  .app-shell.nav-open .sidebar {
+    transform: none;
+    box-shadow: 0 0 60px var(--bg-overlay);
+  }
+  .nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1150;
+    padding: 0;
+    border: 0;
+    background: var(--bg-overlay);
+    cursor: pointer;
+  }
+
+  /* 工具栏换行:搜索框独占一行,操作按钮自然折行 */
+  .toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .search-wrap {
+    width: 100%;
+    order: 10;
+  }
+  .toolbar-right {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .main-content {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+  .content-header h1 {
+    font-size: var(--text-xl, 1.4rem);
+  }
+}
+
+@media (max-width: 560px) {
+  /* 小屏收起次要操作文案,只留图标 */
+  .toolbar .button.secondary,
+  .toolbar .button.primary {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .toolbar .button.secondary svg + *,
+  .toolbar .button.primary svg + * {
+    display: none;
+  }
+}

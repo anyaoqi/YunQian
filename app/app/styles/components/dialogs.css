@@ -203,85 +203,8 @@
 }
 
 /* —— 响应式 —— */
-@media (max-width: 850px) {
-  .app-shell,
-  .app-shell.collapsed {
-    grid-template-columns: 1fr;
-  }
-  .sidebar {
-    position: relative;
-    height: auto;
-    min-height: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--hairline);
-    padding: var(--space-3) var(--space-3) var(--space-2);
-  }
-  .app-shell.collapsed .side-section {
-    display: block;
-  }
-  .app-shell.collapsed .brand-name,
-  .app-shell.collapsed .brand-tag,
-  .app-shell.collapsed .primary-nav button span,
-  .app-shell.collapsed .primary-nav button small,
-  .app-shell.collapsed .sidebar-note span {
-    display: block;
-  }
-  .app-shell.collapsed .primary-nav button {
-    justify-content: flex-start;
-    padding: 7px var(--space-2);
-  }
-  .app-shell.collapsed .sidebar-note {
-    justify-content: flex-start;
-  }
-  .app-shell.collapsed .brand {
-    flex-direction: row;
-    gap: 9px;
-  }
-  .brand {
-    padding-bottom: var(--space-3);
-    margin-bottom: var(--space-3);
-  }
-  .primary-nav {
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-1);
-    margin-bottom: var(--space-3);
-  }  .primary-nav button {
-    flex-direction: column;
-    gap: 3px;
-    justify-content: center;
-    padding: 8px 2px;
-    font-size: var(--text-sm);
-  }
-  .primary-nav button span {
-    display: block;
-  }
-  .primary-nav button small {
-    display: none;
-  }
-  .collection-section,
-  .tags-section {
-    display: none;
-  }
-  .sidebar-note {
-    display: none;
-  }
-  .main-content {
-    padding: 0 var(--space-4) var(--space-8);
-  }
-  .toolbar {
-    flex-wrap: wrap;
-    padding: var(--space-2) 0;
-    gap: var(--space-2);
-  }
-  .search-wrap {
-    order: 2;
-    width: 100%;
-  }
-  .toolbar-right {
-    width: 100%;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
+@media (max-width: 900px) {
+  /* 移动端侧栏抽屉与工具栏换行由 shell.css 的同名媒体块负责,这里只保留内容类适配 */
   .content-header {
     padding-top: var(--space-5);
     flex-wrap: wrap;
