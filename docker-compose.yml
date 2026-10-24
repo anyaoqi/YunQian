@@ -1,0 +1,92 @@
+# 云签 YunQian —— 单机部署编排（Railway / 其他场景参考用）
+#
+# 【腾讯云轻量服务器部署请使用 deploy/ 下的编排（deploy/docker-compose.yml +
+#   deploy/install.sh + deploy/README.md），本文件仅供其他场景参考，勿与本文件混用】
+# 原因：本文件是旧编排（PostgreSQL 16、卷挂 /var/lib/postgresql/data、直连 3000 端口），
+#       deploy/ 是生产编排（PostgreSQL 18、卷挂 /var/lib/postgresql、Caddy 反代 80）。
+#       两者数据库大版本不同，数据卷无法互相识别，混用会导致数据“消失”。
+#
+# 用法：
+#   1. cp .env.example .env   # 然后改里面的密码
+#   2. docker compose up -d --build
+#   3. curl http://127.0.0.1:3000/api/health   # 期望 {"ok":true,"db":"up"}
+#
+# 说明：
+#   - 数据库不映射到宿主机端口，仅 compose 内部网络可达（外网无法直连 5432）。
+#   - 应用容器对外暴露 APP_PORT（默认 3000），用 IP:3000 即可访问。
+#   - 若前置 Nginx/Caddy 做 HTTPS，把 .env 里 APP_BIND 改成 127.0.0.1 即可闭环。
+
+name: yunqian
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: yunqian-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-yunqian}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-yunqian}
+      TZ: Asia/Shanghai
+      # CITEXT 扩展依赖它做大小写不敏感比较，容器默认 locale 已满足
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yunqian} -d ${POSTGRES_DB:-yunqian}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    expose:
+      - "5432"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yunqian-app:latest
+    container_name: yunqian-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # 容器内走 service 名 db，端口固定 5432
+      DATABASE_URL: postgres://${POSTGRES_USER:-yunqian}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-yunqian}
+      JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET（≥32 字符）}
+      # 留空则首次启动生成随机密码并打印在日志里
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      DISABLE_FETCH_TITLE: ${DISABLE_FETCH_TITLE:-0}
+      TZ: Asia/Shanghai
+    ports:
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-3000}:3000"
+    healthcheck:
+      # 镜像内没有 curl，用 Node 自带的 fetch 探活
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
+    name: yunqian-pgdata

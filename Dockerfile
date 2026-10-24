@@ -4,6 +4,12 @@ FROM node:22-slim AS base
 FROM base AS builder
 WORKDIR /repo
 
+# 国内服务器构建默认走 npmmirror（与 .npmrc 一致，避免 corepack 下载 pnpm 卡住）。
+# 海外构建可覆盖：docker build --build-arg COREPACK_NPM_REGISTRY=https://registry.npmjs.org
+ARG COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+ENV COREPACK_NPM_REGISTRY=$COREPACK_NPM_REGISTRY
+ENV NEXT_TELEMETRY_DISABLED=1
+
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY .npmrc pnpm-lock.yaml package.json pnpm-workspace.yaml ./

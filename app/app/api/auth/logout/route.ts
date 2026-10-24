@@ -4,9 +4,9 @@ import { handleRouteError } from '@/lib/server/lib/errors';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const cookieHeader = createLogoutCookie();
+    const cookieHeader = createLogoutCookie(request);
     return Response.json(
       { success: true },
       {

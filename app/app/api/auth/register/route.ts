@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     enforceRateLimit(`register:ip:${ip}`, REGISTER_LIMIT_PER_HOUR, 60 * 60 * 1000, '注册请求过于频繁,请稍后再试');
 
     const { user, token } = await registerUser(input);
-    const cookieHeader = createAuthCookie(token);
+    const cookieHeader = createAuthCookie(token, request);
 
     return Response.json(
       { user },
