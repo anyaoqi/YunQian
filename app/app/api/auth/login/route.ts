@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     const { user, token } = await loginUser(input);
     resetRateLimit(failKey);
-    const cookieHeader = createAuthCookie(token);
+    const cookieHeader = createAuthCookie(token, request);
 
     return Response.json(
       { user },

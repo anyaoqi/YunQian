@@ -9,8 +9,24 @@ export type AuthUser = {
   role: 'admin' | 'user';
 };
 
-export function createAuthCookie(token: string, maxAgeSeconds = 30 * 24 * 60 * 60): string {
-  const isProd = process.env.NODE_ENV === 'production';
+/**
+ * 判断本次请求是否经由 HTTPS 到达。反代(如 Caddy/Nginx)终止 TLS 时源站看到的是 HTTP,
+ * 以 x-forwarded-proto 为准;直连时回退看请求 URL 自身的协议。
+ * 带 Secure 的 cookie 在纯 HTTP 站点上会被浏览器直接丢弃,导致登录成功却拿不到登录态。
+ */
+export function isHttpsRequest(request: Request): boolean {
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  if (forwardedProto) {
+    return forwardedProto.split(',')[0].trim() === 'https';
+  }
+  try {
+    return new URL(request.url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function createAuthCookie(token: string, request: Request, maxAgeSeconds = 30 * 24 * 60 * 60): string {
   const flags = [
     `${AUTH_COOKIE_NAME}=${token}`,
     `Path=/`,
@@ -18,14 +34,13 @@ export function createAuthCookie(token: string, maxAgeSeconds = 30 * 24 * 60 * 6
     `HttpOnly`,
     `SameSite=Lax`,
   ];
-  if (isProd) {
+  if (isHttpsRequest(request)) {
     flags.push('Secure');
   }
   return flags.join('; ');
 }
 
-export function createLogoutCookie(): string {
-  const isProd = process.env.NODE_ENV === 'production';
+export function createLogoutCookie(request: Request): string {
   const flags = [
     `${AUTH_COOKIE_NAME}=`,
     `Path=/`,
@@ -33,7 +48,7 @@ export function createLogoutCookie(): string {
     `HttpOnly`,
     `SameSite=Lax`,
   ];
-  if (isProd) {
+  if (isHttpsRequest(request)) {
     flags.push('Secure');
   }
   return flags.join('; ');
